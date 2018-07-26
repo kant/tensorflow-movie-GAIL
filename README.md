@@ -1,1 +1,1 @@
-# VisualForecat-GAIL
+# VisualForecast
