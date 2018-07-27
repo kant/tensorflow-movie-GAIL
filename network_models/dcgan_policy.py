@@ -2,8 +2,8 @@ import tensorflow as tf
 
 
 class Policy_dcgan:
-    '''dcgan実装によるpolicy networkクラス'''
-    def __init__(self, name, obs_shape=(64,64,3), decode=True):
+    '''encoder decoder policy network'''
+    def __init__(self, name, obs_shape=(3,64,64,1), decode=True):
 
         with tf.variable_scope(name):
             # placeholder for input state
@@ -12,104 +12,124 @@ class Policy_dcgan:
             # policy network
             with tf.variable_scope('policy_net'):
                 with tf.variable_scope('enc'):
+                    # 3x64x64x1 -> 3x32x32x64
                     with tf.variable_scope('enc_1'):
                         x = tf.layers.conv3d(
                                 inputs=self.obs,
                                 filters=64,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x32x32x64 -> 3x16x16x128
                     with tf.variable_scope('enc_2'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=128,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x16x16x128 -> 3x8x8x256
                     with tf.variable_scope('enc_3'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=256,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x8x8x256 -> 3x4x4x512
                     with tf.variable_scope('enc_4'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=512,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x4x4x512 -> 1x2x2x512
                     with tf.variable_scope('enc_5'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=512,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(3,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
-                        self.enc_feature = tf.nn.relu(x, name='relu')
+                        self.enc_feature = tf.reshape(tf.nn.relu(x), shape=(2,2,512))
+
                 if decode:
                     with tf.variable_scope('dec'):
+                        # 2x2x512 -> 4x4x512
                         with tf.variable_scope('dec_1'):
                             x = tf.layers.conv2d_transpose(
                                     self.enc_feature,
                                     filters=512,
                                     kernel_size=(5,5),
                                     stride=2,
+                                    padding='same',
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             x = tf.nn.relu(x, name='relu')
 
+                        # 4x4x512 -> 8x8x256
                         with tf.variable_scope('dec_2'):
                             x = tf.layers.conv2d_transpose(
                                     x,
                                     filters=256,
                                     kernel_size=(5,5),
                                     stride=2,
+                                    padding='same',
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             x = tf.nn.relu(x, name='relu')
 
+                        # 8x8x256 -> 16x16x128
                         with tf.variable_scope('dec_3'):
                             x = tf.layers.conv2d_transpose(
                                     x,
                                     filters=128,
                                     kernel_size=(5,5),
                                     stride=2,
+                                    padding='same',
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             x = tf.nn.relu(x, name='relu')
 
+                        # 16x16x128 -> 32x32x64
                         with tf.variable_scope('dec_4'):
                             x = tf.layers.conv2d_transpose(
                                     x,
                                     filters=64,
                                     kernel_size=(5,5),
                                     stride=2,
+                                    padding='same',
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             x = tf.nn.relu(x, name='relu')
 
+                        # 32x32x64 -> 64x64x1
                         with tf.variable_scope('dec_5'):
                             # inference action mean
                             mu = tf.layers.conv2d_transpose(
@@ -117,6 +137,7 @@ class Policy_dcgan:
                                     filters=1,
                                     kernel_size=(5,5),
                                     stride=2,
+                                    padding='same',
                                     activation=tf.nn.sigmoid,
                                     name='deconv_mu')
                             mu = tf.nn.tanh(tf.layers.flatten(mu), name='mu')
@@ -127,6 +148,7 @@ class Policy_dcgan:
                                     filters=1,
                                     kernel_size=(5,5),
                                     stride=2,
+                                    padding='same',
                                     activation=tf.nn.sigmoid,
                                     name='deconv_sigma')
                             sigma = tf.nn.softplus(tf.layer.flatten(sigma), name='sigma')
@@ -135,8 +157,8 @@ class Policy_dcgan:
                             dist = tf.distributions.Normal(loc=mu, scale=sigma, name='dist')
 
                             # sampling operarion
-                            sample = tf.squeeze(dist.sample(1), axis=0)
-                            self.sample_act_op = tf.reshape(sample, shape=(obs_shape[0], obs_shape[1]), name='sample_act_op')
+                            sample = dist.sample(1)
+                            self.sample_act_op = tf.reshape(sample, shape=(1, obs_shape[1], obs_shape[2], obs_shape[3]), name='sample_act_op')
 
                             # get action prob operation
                             self.act_prob_op = dist.prob(self.obs, name='act_prob_op')
@@ -145,57 +167,68 @@ class Policy_dcgan:
             # value network
             with tf.variable_scope('value_net'):
                 with tf.variable_scope('enc'):
+                    # 3x64x64x1 -> 3x16x16x64
                     with tf.variable_scope('enc_1'):
                         x = tf.layers.conv3d(
                                 inputs=self.obs,
                                 filters=64,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,4,4),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x16x16x64 -> 3x8x8x128
                     with tf.variable_scope('enc_2'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=128,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x8x8x128 -> 3x4x4x256
                     with tf.variable_scope('enc_3'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=256,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x4x4x256 -> 3x2x2x512
                     with tf.variable_scope('enc_4'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=512,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(1,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
+                    # 3x2x2x512 -> 1x1x1x1
                     with tf.variable_scope('enc_5'):
                         x = tf.layers.conv3d(
                                 x,
                                 filters=1,
-                                kernel_size=(5,5),
-                                stride=2,
+                                kernel_size=(3,5,5),
+                                stride=(3,2,2),
+                                padding='same',
                                 activation=None,
                                 name='conv')
+                        x = tf.flatten(x)
                         self.v_preds = tf.nn.sigmoid(x, name='v_preds')
 
             # get network scope name
@@ -205,15 +238,16 @@ class Policy_dcgan:
         '''
         action function
         get sampled stochastic action and predicted value
+        obs: stacked state image
         '''
         return tf.get_default_session().run(
-                [self.sample_act_op, self.v_preds]
+                [self.sample_act_op, self.v_preds],
                 feed_dict={self.obs: obs})
 
     def get_action_prob(self, obs):
         '''
-        obs: state image
         get action prob conditioned from state
+        obs: stacked state image
         '''
         return tf.get_default_session().run(
                 self.act_prob_op,

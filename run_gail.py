@@ -1,19 +1,22 @@
 import os
 import argparse
-import gym
+import copy
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from network_models.policy_net import Policy_mlp
+from network_models.dcgan_policy import Policy_dcgan
 from network_models.discriminator import Discriminator
 from algo.ppo import PPOTrain
+from utils import generator
 
 
-def argparser():mlp
+def argparser():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', help='path to data', default='../../dataset/mnist_test_seq.npy')
     parser.add_argument('--logdir', help='log directory', default='log/train/gail')
     parser.add_argument('--savedir', help='save directory', default='trained_models/gail')
+    parser.add_argument('--batch_size', default=32)
     parser.add_argument('--gamma', default=0.95)
     parser.add_argument('--iteration', default=int(1e4))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
@@ -26,21 +29,20 @@ def main(args):
         os.makedirs(args.logdir)
     if not os.path.exists(args.savedir):
         os.makedirs(args.savedir)
-    # gym環境作成
-    env = gym.make('CartPole-v0')
-    env.seed(0)
-    ob_space = env.observation_space
+    # moving mnist 読み込み
+    data = np.load(args.data_path)
+    obs_shape = (3, 64, 64, 1)
+    # generator
+    gen = generator(data, args.batch_size)
+
     # policy net
-    Policy = Policy_mlp('policy', env)
-    Old_Policy = Policy_mlp('old_policy', env)
+    Policy = Policy_dcgan('policy', obs_shape=obs_shape, decode=True)
+    Old_Policy = Policy_dcgan('old_policy', obs_shape=obs_shape, decode=True)
+
     # ppo学習インスタンス
     PPO = PPOTrain(Policy, Old_Policy, gamma=args.gamma)
     # discriminator
-    D = Discriminator(env)
-
-    # エキスパートtrajectory読み込み
-    expert_observations = np.genfromtxt('trajectory/observations.csv')
-    expert_actions = np.genfromtxt('trajectory/actions.csv', dtype=np.int32)
+    D = Discriminator(obs_shape=obs_shape)
 
     # tensorflow saver
     saver = tf.train.Saver()
@@ -54,128 +56,112 @@ def main(args):
     with tf.Session(config=config) as sess:
         # summary writer
         writer = tf.summary.FileWriter(args.logdir, sess.graph)
-        # Sessionの初期化
+        # initialize Session
         sess.run(tf.global_variables_initializer())
-        # 状態の初期化
-        obs = env.reset()
-        success_num = 0
         # episode loop
         for iteration in tqdm(range(args.iteration)):
+            # create batch
+            expert_batch = next(gen)
+            # first 3 frame
+            agent_batch = expert_batch[:,:3,:,:,:]
             # buffer
             observations = []
-            actions = []
+            next_observations = []
             rewards = []
             v_preds = []
             run_policy_steps = 0
             # run episode
-            while True:
+            while len(observations):
                 run_policy_steps += 1
-                # ネットワーク入力用にobsを変換
-                obs = np.stack([obs]).astype(dtype=np.float32)
 
-                # 行動と価値を推定
-                act, v_pred = Policy.act(obs=obs, stochastic=True)
+                # inference action(next frame) and value
+                act, v_pred = Policy.act(obs=agent_batch, stochastic=True)
 
-                # 要素数が1の配列をスカラーに変換
-                act = np.asscalar(act)
-                v_pred = np.asscalar(v_pred)
+                # create next_obs
+                agent_batch_next = np.concatenate([agent_batch[:,1:,:,:,:], act], axis=1)
 
-                # policy netの推定行動で状態の更新
-                next_obs, reward, done, info = env.step(act)
+                # inference reward by discriminator
+                reward = D.get_rewards(agent_s=agent_batch, agent_a=agent_batch_next)
 
                 # episodeの各変数を追加
-                observations.append(obs)
-                actions.append(act)
+                observations.append(agent_batch)
+                next_observations.append(agent_batch_next)
                 v_preds.append(v_pred)
                 rewards.append(reward)
 
-                # episode終了判定
-                if done:
+                if run_policy_steps >= 6:
                     v_preds_next = v_preds[1:] + [0]
-                    obs = env.reset()
-                    reward = -1
                     break
                 else:
-                    obs = next_obs
+                    # updata observations by old observations
+                    agent_batch = agent_batch_next
 
-            # summary追加
-            writer.add_summary(
-                    tf.Summary(value=[tf.Summary.Value(
-                        tag='episode_length',
-                        simple_value=run_policy_steps)]),
-                    iteration)
             writer.add_summary(
                     tf.Summary(value=[tf.Summary.Value(
                         tag='episode_reward',
                         simple_value=sum(rewards))]),
                     iteration)
 
-            # episode成功判定
-            if sum(rewards) >= 195:
-                success_num += 1
-                # 連続で100回成功していればepisode loopを終了
-                if success_num >= 100:
-                    saver.save(sess, args.savedir+'/model.ckpt')
-                    print('Clear!! Model saved.')
-                    break
-            else:
-                success_num = 0
+            # discriminator
+            D_step = 2
+            D_expert = np.random.randint(low=0, high=5, size=D_step)
+            D_agent = np.random.randint(low=0, high=len(observations), size=D_step)
+            for i in range(D_step):
+                # expert input
+                expert_obs = expert_batch[:,D_expert[i]:D_expert[i]+3,:,:,:]
+                expert_obs_next = expert_batch[:,D_expert[i]+1:D_expert[i]+4,:,:,:]
+                # agent input
+                agent_obs = observations[D_agent[i]]
+                agent_obs_next = next_observations[D_agent[i]]
+                # run discriminator train
+                D.train(expert_s=expert_obs,
+                        expert_a=expert_obs_next,
+                        agent_s=agent_obs,
+                        agent_a=agent_obs_next)
 
-            # policy netによるtrajectryをプレースホルダー用に変換
-            observations = np.reshape(observations, newshape=[-1] + list(ob_space.shape))
-            actions = np.array(actions).astype(dtype=np.int32)
 
-            ###########################
-            # GAILの変更点はここだけ
-            # discriminatorでエキスパートの報酬に近づける
-            # discriminator学習 2回
-            for i in range(2):
-                D.train(expert_s=expert_observations,
-                        expert_a=expert_actions,
-                        agent_s=observations,
-                        agent_a=actions)
-
+            # updata policy using PPO
             # get d_rewards from discrminator
-            d_rewards = D.get_rewards(agent_s=observations, agent_a=actions)
-            # transform d_rewards to numpy for placeholder
-            d_rewards = np.reshape(d_rewards, newshape=[-1]).astype(dtype=np.float32)
-            ###########################
+            d_rewards = []
+            for i in enumerate(observations):
+                d_reward = D.get_rewards(agent_s=observations[i], agent_a=next_observations[i])
+                # transform d_rewards to numpy for placeholder
+                d_rewards.append(d_reward)
 
             # get generalized advantage estimator
             gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
+            # gae = (gaes - gaes.mean()) / gaes.std()
+
             gaes = np.array(gaes).astype(dtype=np.float32)
-            # gaes = (gaes - gaes.mean()) / gaes.std()
             v_preds_next = np.array(v_preds_next).astype(dtype=np.float32)
 
-            # ppo input data whose rewards is discriminator rewards
-            inp = [observations, actions, gaes, d_rewards, v_preds_next]
             # assign parameters to old policy
             PPO.assign_policy_parameters()
 
+            # sample index
+            PPO_step = 6
+            sample_indices = np.random.randint(
+                    low=0,
+                    high=len(observations),
+                    size=PPO_step)
             # train PPO
-            for epoch in range(6):
-                # sample index
-                sample_indices = np.random.randint(
-                        low=0,
-                        high=observations.shape[0],
-                        size=32)
-                # sampling from input data
-                sampled_inp = [np.take(a=a, indices=sample_indices, axis=0) for a in inp]
+            for epoch in range(PPO_step):
+                idx = sample_indices[epoch]
                 # run ppo
                 PPO.train(
-                        obs=sampled_inp[0],
-                        actions=sampled_inp[1],
-                        gaes=sampled_inp[2],
-                        rewards=sampled_inp[3],
-                        v_preds_next=sampled_inp[4])
+                        obs=observations[idx],
+                        actions=next_observations[idx],
+                        gaes=gaes[idx],
+                        rewards=d_rewards[idx],
+                        v_preds_next=v_preds_next[idx])
 
             # get summary
             summary = PPO.get_summary(
-                    obs=inp[0],
-                    actions=inp[1],
-                    gaes=inp[2],
-                    rewards=inp[3],
-                    v_preds_next=inp[4])
+                    obs=observations,
+                    actions=next_observations,
+                    gaes=gaes,
+                    rewards=d_rewards,
+                    v_preds_next=v_preds_next)
 
             # add summary
             writer.add_summary(summary, iteration)

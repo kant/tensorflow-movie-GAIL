@@ -2,77 +2,136 @@ import tensorflow as tf
 
 
 class Discriminator:
-    def __init__(self, env):
+    def __init__(self, obs_shape=(3,64,64,1)):
         """
-        env: 環境
-        Generatice Adversarial by Imitation Learningのdiscriminatorクラス
-        報酬関数の近似を行なっており,expertの方策は1,agentの方策は0になるようにtrain
+        visual forecasting by imitation learning class
+        obs_shape: stacked state image shape
         """
 
         with tf.variable_scope('discriminator'):
             # get vaiable scope name
             self.scope = tf.get_variable_scope().name
+
             # expert state placeholder
-            self.expert_s = tf.placeholder(dtype=tf.float32, shape=[None] + list(env.observation_space.shape))
+            self.expert_s = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # expert action placeholder
-            self.expert_a = tf.placeholder(dtype=tf.int32, shape=[None])
-            expert_a_one_hot = tf.one_hot(self.expert_a, depth=env.action_space.n)
+            self.expert_a = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # add noise to expert action
-            expert_a_one_hot += tf.random_normal(tf.shape(expert_a_one_hot), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            expert_a += tf.random_normal(tf.shape(expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
-            expert_s_a = tf.concat([self.expert_s, expert_a_one_hot], axis=1)
+            expert_s_a = tf.concat([self.expert_s, expert_a], axis=1)
 
             # agent state placeholder
-            self.agent_s = tf.placeholder(dtype=tf.float32, shape=[None] + list(env.observation_space.shape))
+            self.agent_s = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # agent action placeholder
-            self.agent_a = tf.placeholder(dtype=tf.int32, shape=[None])
-            agent_a_one_hot = tf.one_hot(self.agent_a, depth=env.action_space.n)
+            self.agent_a = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # add noise to agent action
-            agent_a_one_hot += tf.random_normal(tf.shape(agent_a_one_hot), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            agent_a += tf.random_normal(tf.shape(agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
-            agent_s_a = tf.concat([self.agent_s, agent_a_one_hot], axis=1)
+            agent_s_a = tf.concat([self.agent_s, agent_a], axis=1)
 
             with tf.variable_scope('network') as network_scope:
+                # state-action of expert
                 expert_prob = self.construct_network(input=expert_s_a)
-                # 同じスコープのnameをもつパラメータを共有
+                # share parameter of same scope with expert and agent
                 network_scope.reuse_variables()
+                # state-action of agent
                 agent_prob = self.construct_network(input=agent_s_a)
 
             with tf.variable_scope('loss'):
-                # expertのrewardは大きく
+                # maximiz D(s,a), because expert rewards are bigger than agent rewards
                 loss_expert = tf.reduce_mean(tf.log(tf.clip_by_value(expert_prob, 0.01, 1)))
-                # agentのrewardは小さくしたいので1から引く
+
+                # maximize 1-D(s,a), because agent rewards are smoller than expert rewards
                 loss_agent = tf.reduce_mean(tf.log(tf.clip_by_value(1 - agent_prob, 0.01, 1)))
-                # tensorflowなので最小化 reward->cost
+
+                # inverse sign because tensorflow minimize loss
                 loss = loss_expert + loss_agent
                 loss = -loss
-                # summaryにdiscriminatorのlossを追加
+
+                # add discriminator loss to summary
                 tf.summary.scalar('discriminator', loss)
 
-            # optimizer
+            # optimize operation
             optimizer = tf.train.AdamOptimizer()
             self.train_op = optimizer.minimize(loss)
 
-            # 報酬関数固定でエージェントの報酬推定operation
+            # fix discriminator and get d_reward
             self.rewards = tf.log(tf.clip_by_value(agent_prob, 1e-10, 1))
 
-    def construct_network(self, input):
+    def construct_network(self, s_a_input):
         '''
         input: expertかactionのstate-action
         discriminatorのbuild関数
         '''
-        layer_1 = tf.layers.dense(inputs=input, units=20, activation=tf.nn.leaky_relu, name='layer1')
-        layer_2 = tf.layers.dense(inputs=layer_1, units=20, activation=tf.nn.leaky_relu, name='layer2')
-        layer_3 = tf.layers.dense(inputs=layer_2, units=20, activation=tf.nn.leaky_relu, name='layer3')
+        # 6x64x64x1 -> 6x16x16x64
+        x = tf.layers.conv3d(
+                inputs=s_a_input,
+                filters=64,
+                kernel_size=(6,5,5),
+                stride=(1,4,4),
+                padding='same',
+                activation=None,
+                name='conv')
+        x = tf.nn.relu(x, name='relu')
+
+        # 6x16x16x64 -> 6x8x8x128
+        x = tf.layers.conv3d(
+                x,
+                filters=128,
+                kernel_size=(6,5,5),
+                stride=(1,2,2),
+                padding='same',
+                activation=None,
+                name='conv')
+        x = tf.layers.batch_normalization(x, name='BN')
+        x = tf.nn.relu(x, name='relu')
+
+        # 6x8x8x128 -> 6x4x4x256
+        x = tf.layers.conv3d(
+                x,
+                filters=256,
+                kernel_size=(6,5,5),
+                stride=(1,2,2),
+                padding='same',
+                activation=None,
+                name='conv')
+        x = tf.layers.batch_normalization(x, name='BN')
+        x = tf.nn.relu(x, name='relu')
+
+        # 6x4x4x256 -> 6x2x2x512
+        x = tf.layers.conv3d(
+                x,
+                filters=512,
+                kernel_size=(6,5,5),
+                stride=(1,2,2),
+                padding='same',
+                activation=None,
+                name='conv')
+        x = tf.layers.batch_normalization(x, name='BN')
+        x = tf.nn.relu(x, name='relu')
+
+        # 6x2x2x512 -> 1x1x1x1
+        x = tf.layers.conv3d(
+                x,
+                filters=1,
+                kernel_size=(6,5,5),
+                stride=(6,2,2),
+                padding='same',
+                activation=None,
+                name='conv')
+
+        x = tf.flatten(x)
         # sigmoid activation 0~1
-        prob = tf.layers.dense(inputs=layer_3, units=1, activation=tf.sigmoid, name='prob')
+        prob = tf.nn.sigmoid(inputs=x, name='prob')
+
         return prob
 
     def train(self, expert_s, expert_a, agent_s, agent_a):
         '''
-        expert_s, expert_a: expertのstate-action
-        agent_s, agent_a: agentのstate-action
-        Discriminatorのtrain-step関数
+        train discriminator function
+        expert_s, expert_a: state-action of expert
+        agent_s, agent_a: state-action of expert
         '''
         return tf.get_default_session().run(
                 self.train_op,
@@ -84,9 +143,9 @@ class Discriminator:
 
     def get_rewards(self, agent_s, agent_a):
         '''
-        agent_s: agentの状態
-        agent_a: agentの行動
-        方策固定でagentの報酬をdiscriminatorで推定する関数
+        fix D and get rewards
+        agent_s: agent state
+        agent_a: agent action
         '''
         return tf.get_default_session().run(
                 self.rewards,
@@ -95,5 +154,5 @@ class Discriminator:
                     self.agent_a: agent_a})
 
     def get_trainable_variables(self):
-        '''学習可能なパラメータのみ取得する関数'''
+        '''get trainable paremeter function'''
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
