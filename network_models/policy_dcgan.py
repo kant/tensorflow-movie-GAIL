@@ -7,7 +7,7 @@ class Policy_dcgan:
 
         with tf.variable_scope(name):
             # placeholder for input state
-            self.obs = tf.placeholder(dtype=tf.float32, shape=obs_shape, name='obs')
+            self.obs = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape, name='obs')
 
             # policy network
             with tf.variable_scope('policy_net'):
@@ -63,7 +63,7 @@ class Policy_dcgan:
                         x = tf.layers.batch_normalization(x, name='BN')
                         x = tf.nn.relu(x, name='relu')
 
-                    # 3x4x4x512 -> 1x2x2x512
+                    # 3x4x4x512 -> 2x2x512
                     with tf.variable_scope('enc_5'):
                         x = tf.layers.conv3d(
                                 x,
@@ -75,7 +75,7 @@ class Policy_dcgan:
                                 name='conv')
                         self.enc_feature = tf.reshape(
                                 tf.nn.relu(x),
-                                shape=(obs_shape[0],2,2,512))
+                                shape=[-1,2,2,512])
 
                 if decode:
                     with tf.variable_scope('dec'):
@@ -142,7 +142,7 @@ class Policy_dcgan:
                                     padding='same',
                                     activation=tf.nn.sigmoid,
                                     name='deconv_mu')
-                            mu = tf.nn.tanh(mu, name='mu')
+                            mu = tf.nn.tanh(tf.layers.flatten(mu), name='mu')
 
                             # inference action std
                             sigma = tf.layers.conv2d_transpose(
@@ -153,25 +153,28 @@ class Policy_dcgan:
                                     padding='same',
                                     activation=tf.nn.sigmoid,
                                     name='deconv_sigma')
-                            sigma = tf.nn.softplus(sigma, name='sigma')
+                            sigma = tf.nn.softplus(tf.layers.flatten(sigma), name='sigma')
 
                             # action space distribution
-                            dist = tf.distributions.Normal(loc=mu, scale=sigma, name='dist')
+                            dist = tf.contrib.distributions.MultivariateNormalDiag(
+                                    loc=mu,
+                                    scale_diag=sigma,
+                                    name='dist')
 
                             # sampling operarion
                             sample = dist.sample(1)
                             self.sample_act_op = tf.reshape(
                                     sample,
-                                    shape=(
-                                        obs_shape[0],
-                                        1,
-                                        obs_shape[2],
-                                        obs_shape[3],
-                                        obs_shape[4]),
+                                    shape=[-1,1]+obs_shape[1:],
                                     name='sample_act_op')
 
+                            #test_sess = tf.InteractiveSession()
+                            #print('sample_shape: ', test_sess.run(tf.shape(sample)))
+
+
                             # get action prob operation
-                            self.act_probs = dist.prob(sample, name='act_probs')
+                            self.act_probs_op = dist.prob(sample, name='act_probs')
+
 
 
             # value network
@@ -238,7 +241,7 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        x = tf.reshape(x, shape=(obs_shape[0], 1))
+                        x = tf.reshape(x, shape=[-1,1])
                         self.v_preds = tf.nn.sigmoid(x, name='v_preds')
 
             # get network scope name

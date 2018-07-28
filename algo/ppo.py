@@ -4,7 +4,15 @@ import copy
 
 class PPOTrain:
     '''PPO学習用クラス'''
-    def __init__(self, Policy, Old_Policy, gamma=0.95, clip_value=0.2, c_1=1, c_2=0.01):
+    def __init__(
+            self,
+            Policy,
+            Old_Policy,
+            obs_shape,
+            gamma=0.95,
+            clip_value=0.2,
+            c_1=1,
+            c_2=0.01):
         # Policy network
         self.Policy = Policy
         self.Old_Policy = Old_Policy
@@ -20,16 +28,16 @@ class PPOTrain:
             for v_old, v in zip(old_pi_trainable, pi_trainable):
                 self.assign_ops.append(tf.assign(v_old, v))
 
-        # 入力用のプレースホルダー定義
+        # prepare placeholder
         with tf.variable_scope('train_inp'):
-            self.actions = tf.placeholder(dtype=tf.int32, shape=[None], name='actions')
-            self.rewards = tf.placeholder(dtype=tf.float32, shape=[None], name='rewards')
-            self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None], name='v_preds_next')
-            self.gaes = tf.placeholder(dtype=tf.float32, shape=[None], name='gaes')
+            self.actions = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape, name='actions')
+            self.rewards = tf.placeholder(dtype=tf.float32, shape=[None,1], name='rewards')
+            self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None,1], name='v_preds_next')
+            self.gaes = tf.placeholder(dtype=tf.float32, shape=[None,1], name='gaes')
 
         # pi(a|s)を取得
-        act_probs = self.Policy.act_probs
-        act_probs_old = self.Old_Policy.act_probs
+        act_probs = self.Policy.act_probs_op
+        act_probs_old = self.Old_Policy.act_probs_op
 
         with tf.variable_scope('loss'):
             # ratios = tf.divide(act_probs, act_probs_old)
@@ -38,7 +46,7 @@ class PPOTrain:
             ratios = tf.exp(
                     tf.log(
                         tf.clip_by_value(act_probs, 1e-10, 1.0)) - tf.log(tf.clip_by_value(act_probs_old, 1e-10, 1.0)))
-            # ratiosをclipping
+            # clipping ratios
             clipped_ratios = tf.clip_by_value(
                     ratios,
                     clip_value_min=1 - clip_value,
@@ -54,7 +62,7 @@ class PPOTrain:
             # 探索を促すためのentropy制約項
             # 方策のentropyが小さくなりすぎるのを防ぐ
             entropy = -tf.reduce_sum(
-                    self.Policy.act_probs * tf.log(tf.clip_by_value(self.Policy.act_probs,
+                    self.Policy.act_probs_op * tf.log(tf.clip_by_value(self.Policy.act_probs_op,
                                                                     1e-10,
                                                                     1.0)),
                     axis=1)

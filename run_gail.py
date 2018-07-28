@@ -18,7 +18,7 @@ def argparser():
     parser.add_argument('--savedir', help='save directory', default='trained_models/gail')
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--gamma', default=0.95)
-    parser.add_argument('--iteration', default=int(1e4))
+    parser.add_argument('--iteration', default=int(1e3))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
 
@@ -31,7 +31,7 @@ def main(args):
         os.makedirs(args.savedir)
     # moving mnist 読み込み
     data = np.load(args.data_path)
-    obs_shape = (args.batch_size, 3, 64, 64, 1)
+    obs_shape = [3, 64, 64, 1]
     # generator
     gen = generator(data, args.batch_size)
 
@@ -40,7 +40,7 @@ def main(args):
     Old_Policy = Policy_dcgan('old_policy', obs_shape=obs_shape, decode=True)
 
     # ppo学習インスタンス
-    PPO = PPOTrain(Policy, Old_Policy, gamma=args.gamma)
+    PPO = PPOTrain(Policy, Old_Policy, obs_shape=obs_shape, gamma=args.gamma)
     # discriminator
     D = Discriminator(obs_shape=obs_shape)
 
@@ -77,9 +77,6 @@ def main(args):
 
                 # create next_obs
                 agent_batch_next = np.concatenate([agent_batch[:,1:,:,:,:], act], axis=1)
-                agent_batch_next = np.reshape(
-                        agent_batch_next,
-                        (args.batch_size,3,64,64,1))
 
                 # inference reward by discriminator
                 reward = D.get_rewards(agent_s=agent_batch, agent_a=agent_batch_next)
@@ -91,8 +88,8 @@ def main(args):
                 rewards.append(reward)
 
                 run_policy_steps += 1
-                if run_policy_steps >= 6:
-                    v_preds_next = v_preds[1:] + [0]
+                if run_policy_steps >= 7:
+                    v_preds_next = v_preds[1:] + [np.zeros(v_preds[0].shape)]
                     break
                 else:
                     # updata observations by old observations
@@ -123,7 +120,6 @@ def main(args):
                         agent_s=agent_obs,
                         agent_a=agent_obs_next)
 
-
             # updata policy using PPO
             # get d_rewards from discrminator
             d_rewards = []
@@ -135,9 +131,6 @@ def main(args):
             # get generalized advantage estimator
             gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
             # gae = (gaes - gaes.mean()) / gaes.std()
-
-            gaes = np.array(gaes).astype(dtype=np.float32)
-            v_preds_next = np.array(v_preds_next)
 
             # assign parameters to old policy
             PPO.assign_policy_parameters()
@@ -161,11 +154,11 @@ def main(args):
 
             # get summary
             summary = PPO.get_summary(
-                    obs=observations,
-                    actions=next_observations,
-                    gaes=gaes,
-                    rewards=d_rewards,
-                    v_preds_next=v_preds_next)
+                    obs=observations[-1],
+                    actions=next_observations[-1],
+                    gaes=gaes[-1],
+                    rewards=d_rewards[-1],
+                    v_preds_next=v_preds_next[-1])
 
             # add summary
             writer.add_summary(summary, iteration)

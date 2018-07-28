@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 class Discriminator:
-    def __init__(self, obs_shape=(3,64,64,1)):
+    def __init__(self, obs_shape):
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
@@ -13,18 +13,18 @@ class Discriminator:
             self.scope = tf.get_variable_scope().name
 
             # expert state placeholder
-            self.expert_s = tf.placeholder(dtype=tf.float32, shape=obs_shape)
+            self.expert_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # expert action placeholder
-            self.expert_a = tf.placeholder(dtype=tf.float32, shape=obs_shape)
+            self.expert_a = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # add noise to expert action
             self.expert_a += tf.random_normal(tf.shape(self.expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
             expert_s_a = tf.concat([self.expert_s, self.expert_a], axis=1)
 
             # agent state placeholder
-            self.agent_s = tf.placeholder(dtype=tf.float32, shape=obs_shape)
+            self.agent_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # agent action placeholder
-            self.agent_a = tf.placeholder(dtype=tf.float32, shape=obs_shape)
+            self.agent_a = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # add noise to agent action
             self.agent_a += tf.random_normal(tf.shape(self.agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
