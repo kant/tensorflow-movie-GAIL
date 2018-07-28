@@ -27,14 +27,9 @@ class PPOTrain:
             self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None], name='v_preds_next')
             self.gaes = tf.placeholder(dtype=tf.float32, shape=[None], name='gaes')
 
-        # ある行動についてだけのprobを取得
+        # pi(a|s)を取得
         act_probs = self.Policy.act_probs
-        act_probs = act_probs * tf.one_hot(indices=self.actions, depth=act_probs.shape[1])
-        act_probs = tf.reduce_sum(act_probs, axis=1)
-
         act_probs_old = self.Old_Policy.act_probs
-        act_probs_old = act_probs_old * tf.one_hot(indices=self.actions, depth=act_probs_old.shape[1])
-        act_probs_old = tf.reduce_sum(act_probs_old, axis=1)
 
         with tf.variable_scope('loss'):
             # ratios = tf.divide(act_probs, act_probs_old)

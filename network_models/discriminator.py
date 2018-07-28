@@ -17,18 +17,18 @@ class Discriminator:
             # expert action placeholder
             self.expert_a = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # add noise to expert action
-            expert_a += tf.random_normal(tf.shape(expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            self.expert_a += tf.random_normal(tf.shape(self.expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
-            expert_s_a = tf.concat([self.expert_s, expert_a], axis=1)
+            expert_s_a = tf.concat([self.expert_s, self.expert_a], axis=1)
 
             # agent state placeholder
             self.agent_s = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # agent action placeholder
             self.agent_a = tf.placeholder(dtype=tf.float32, shape=obs_shape)
             # add noise to agent action
-            agent_a += tf.random_normal(tf.shape(agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            self.agent_a += tf.random_normal(tf.shape(self.agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
-            agent_s_a = tf.concat([self.agent_s, agent_a], axis=1)
+            agent_s_a = tf.concat([self.agent_s, self.agent_a], axis=1)
 
             with tf.variable_scope('network') as network_scope:
                 # state-action of expert
@@ -59,71 +59,77 @@ class Discriminator:
             # fix discriminator and get d_reward
             self.rewards = tf.log(tf.clip_by_value(agent_prob, 1e-10, 1))
 
-    def construct_network(self, s_a_input):
+    def construct_network(self, input):
         '''
         input: expertかactionのstate-action
         discriminatorのbuild関数
         '''
-        # 6x64x64x1 -> 6x16x16x64
-        x = tf.layers.conv3d(
-                inputs=s_a_input,
-                filters=64,
-                kernel_size=(6,5,5),
-                stride=(1,4,4),
-                padding='same',
-                activation=None,
-                name='conv')
-        x = tf.nn.relu(x, name='relu')
 
-        # 6x16x16x64 -> 6x8x8x128
-        x = tf.layers.conv3d(
-                x,
-                filters=128,
-                kernel_size=(6,5,5),
-                stride=(1,2,2),
-                padding='same',
-                activation=None,
-                name='conv')
-        x = tf.layers.batch_normalization(x, name='BN')
-        x = tf.nn.relu(x, name='relu')
+        with tf.variable_scope('block_1'):
+            # 6x64x64x1 -> 6x16x16x64
+            x = tf.layers.conv3d(
+                    inputs=input,
+                    filters=64,
+                    kernel_size=(6,5,5),
+                    strides=(1,4,4),
+                    padding='same',
+                    activation=None,
+                    name='conv')
+            x = tf.nn.relu(x, name='relu')
 
-        # 6x8x8x128 -> 6x4x4x256
-        x = tf.layers.conv3d(
-                x,
-                filters=256,
-                kernel_size=(6,5,5),
-                stride=(1,2,2),
-                padding='same',
-                activation=None,
-                name='conv')
-        x = tf.layers.batch_normalization(x, name='BN')
-        x = tf.nn.relu(x, name='relu')
+        with tf.variable_scope('block_2'):
+            # 6x16x16x64 -> 6x8x8x128
+            x = tf.layers.conv3d(
+                    x,
+                    filters=128,
+                    kernel_size=(6,5,5),
+                    strides=(1,2,2),
+                    padding='same',
+                    activation=None,
+                    name='conv')
+            x = tf.layers.batch_normalization(x, name='BN')
+            x = tf.nn.relu(x, name='relu')
 
-        # 6x4x4x256 -> 6x2x2x512
-        x = tf.layers.conv3d(
-                x,
-                filters=512,
-                kernel_size=(6,5,5),
-                stride=(1,2,2),
-                padding='same',
-                activation=None,
-                name='conv')
-        x = tf.layers.batch_normalization(x, name='BN')
-        x = tf.nn.relu(x, name='relu')
+        with tf.variable_scope('block_3'):
+            # 6x8x8x128 -> 6x4x4x256
+            x = tf.layers.conv3d(
+                    x,
+                    filters=256,
+                    kernel_size=(6,5,5),
+                    strides=(1,2,2),
+                    padding='same',
+                    activation=None,
+                    name='conv')
+            x = tf.layers.batch_normalization(x, name='BN')
+            x = tf.nn.relu(x, name='relu')
 
-        # 6x2x2x512 -> 1x1x1x1
-        x = tf.layers.conv3d(
-                x,
-                filters=1,
-                kernel_size=(6,5,5),
-                stride=(6,2,2),
-                padding='same',
-                activation=None,
-                name='conv')
+        with tf.variable_scope('block_4'):
+            # 6x4x4x256 -> 6x2x2x512
+            x = tf.layers.conv3d(
+                    x,
+                    filters=512,
+                    kernel_size=(6,5,5),
+                    strides=(1,2,2),
+                    padding='same',
+                    activation=None,
+                    name='conv')
+            x = tf.layers.batch_normalization(x, name='BN')
+            x = tf.nn.relu(x, name='relu')
 
-        x = tf.flatten(x)
-        # sigmoid activation 0~1
-        prob = tf.nn.sigmoid(inputs=x, name='prob')
+        with tf.variable_scope('block_5'):
+            # 6x2x2x512 -> 1x1x1x1
+            x = tf.layers.conv3d(
+                    x,
+                    filters=1,
+                    kernel_size=(6,5,5),
+                    strides=(6,2,2),
+                    padding='same',
+                    activation=None,
+                    name='conv')
+
+            x = tf.layers.flatten(x, name='flatten')
+            # sigmoid activation 0~1
+            prob = tf.sigmoid(x, name='prob')
 
         return prob
 

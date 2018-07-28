@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from network_models.dcgan_policy import Policy_dcgan
+from network_models.policy_dcgan import Policy_dcgan
 from network_models.discriminator import Discriminator
 from algo.ppo import PPOTrain
 from utils import generator
@@ -31,7 +31,7 @@ def main(args):
         os.makedirs(args.savedir)
     # moving mnist 読み込み
     data = np.load(args.data_path)
-    obs_shape = (3, 64, 64, 1)
+    obs_shape = (args.batch_size, 3, 64, 64, 1)
     # generator
     gen = generator(data, args.batch_size)
 
@@ -71,14 +71,15 @@ def main(args):
             v_preds = []
             run_policy_steps = 0
             # run episode
-            while len(observations):
-                run_policy_steps += 1
-
+            while True:
                 # inference action(next frame) and value
-                act, v_pred = Policy.act(obs=agent_batch, stochastic=True)
+                act, v_pred = Policy.act(obs=agent_batch)
 
                 # create next_obs
                 agent_batch_next = np.concatenate([agent_batch[:,1:,:,:,:], act], axis=1)
+                agent_batch_next = np.reshape(
+                        agent_batch_next,
+                        (args.batch_size,3,64,64,1))
 
                 # inference reward by discriminator
                 reward = D.get_rewards(agent_s=agent_batch, agent_a=agent_batch_next)
@@ -89,6 +90,7 @@ def main(args):
                 v_preds.append(v_pred)
                 rewards.append(reward)
 
+                run_policy_steps += 1
                 if run_policy_steps >= 6:
                     v_preds_next = v_preds[1:] + [0]
                     break
@@ -96,11 +98,13 @@ def main(args):
                     # updata observations by old observations
                     agent_batch = agent_batch_next
 
+            '''
             writer.add_summary(
                     tf.Summary(value=[tf.Summary.Value(
                         tag='episode_reward',
                         simple_value=sum(rewards))]),
                     iteration)
+                    '''
 
             # discriminator
             D_step = 2
@@ -123,7 +127,7 @@ def main(args):
             # updata policy using PPO
             # get d_rewards from discrminator
             d_rewards = []
-            for i in enumerate(observations):
+            for i, _ in enumerate(observations):
                 d_reward = D.get_rewards(agent_s=observations[i], agent_a=next_observations[i])
                 # transform d_rewards to numpy for placeholder
                 d_rewards.append(d_reward)
@@ -133,7 +137,7 @@ def main(args):
             # gae = (gaes - gaes.mean()) / gaes.std()
 
             gaes = np.array(gaes).astype(dtype=np.float32)
-            v_preds_next = np.array(v_preds_next).astype(dtype=np.float32)
+            v_preds_next = np.array(v_preds_next)
 
             # assign parameters to old policy
             PPO.assign_policy_parameters()
