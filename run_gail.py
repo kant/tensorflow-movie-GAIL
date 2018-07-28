@@ -64,6 +64,10 @@ def main(args):
             expert_batch = next(gen)
             # first 3 frame
             agent_batch = expert_batch[:,:3,:,:,:]
+
+            # test
+            #print('act_prob_op:', Policy.test_run(next(gen)[:,:3,:,:,:]))
+
             # buffer
             observations = []
             next_observations = []
@@ -95,13 +99,11 @@ def main(args):
                     # updata observations by old observations
                     agent_batch = agent_batch_next
 
-            '''
             writer.add_summary(
                     tf.Summary(value=[tf.Summary.Value(
                         tag='episode_reward',
-                        simple_value=sum(rewards))]),
+                        simple_value=sum(rewards[-1]))]),
                     iteration)
-                    '''
 
             # discriminator
             D_step = 2

@@ -61,12 +61,9 @@ class PPOTrain:
 
             # 探索を促すためのentropy制約項
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = -tf.reduce_sum(
-                    self.Policy.act_probs_op * tf.log(tf.clip_by_value(self.Policy.act_probs_op,
-                                                                    1e-10,
-                                                                    1.0)),
-                    axis=1)
-            entropy = tf.reduce_mean(entropy, axis=0)
+            entropy = - self.Policy.act_probs_op * tf.log(tf.clip_by_value(self.Policy.act_probs_op, 1e-10, 1.0)) \
+                    - (1 - self.Policy.act_probs_op) * tf.log(tf.clip_by_value(1-self.Policy.act_probs_op, 1e-10, 1.0))
+            entropy = tf.reduce_mean(entropy)
             tf.summary.scalar('entropy', entropy)
 
             # 状態価値の分散を大きくしないための制約項

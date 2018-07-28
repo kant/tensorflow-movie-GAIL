@@ -17,7 +17,7 @@ class Discriminator:
             # expert action placeholder
             self.expert_a = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # add noise to expert action
-            self.expert_a += tf.random_normal(tf.shape(self.expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            #self.expert_a += tf.random_normal(tf.shape(self.expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
             expert_s_a = tf.concat([self.expert_s, self.expert_a], axis=1)
 
@@ -26,7 +26,7 @@ class Discriminator:
             # agent action placeholder
             self.agent_a = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # add noise to agent action
-            self.agent_a += tf.random_normal(tf.shape(self.agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            #self.agent_a += tf.random_normal(tf.shape(self.agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
             agent_s_a = tf.concat([self.agent_s, self.agent_a], axis=1)
 

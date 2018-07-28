@@ -162,14 +162,11 @@ class Policy_dcgan:
                                     name='dist')
 
                             # sampling operarion
-                            sample = dist.sample(1)
+                            sample = tf.squeeze(dist.sample(1), axis=0)
                             self.sample_act_op = tf.reshape(
                                     sample,
                                     shape=[-1,1]+obs_shape[1:],
                                     name='sample_act_op')
-
-                            #test_sess = tf.InteractiveSession()
-                            #print('sample_shape: ', test_sess.run(tf.shape(sample)))
 
 
                             # get action prob operation
@@ -263,7 +260,7 @@ class Policy_dcgan:
         obs: stacked state image
         '''
         return tf.get_default_session().run(
-                self.act_prob_op,
+                self.act_probs_op,
                 feed_dict={self.obs: obs})
 
     def get_variables(self):
@@ -273,3 +270,11 @@ class Policy_dcgan:
     def get_trainable_variables(self):
         '''get trainable param function'''
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
+
+    def test_run(self, obs):
+        '''
+        test run
+        '''
+        return tf.get_default_session().run(
+                tf.shape(self.act_probs_op),
+                feed_dict={self.obs: obs})
