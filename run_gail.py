@@ -17,6 +17,7 @@ def argparser():
     parser.add_argument('--logdir', help='log directory', default='log/train/gail')
     parser.add_argument('--savedir', help='save directory', default='trained_models/gail')
     parser.add_argument('--batch_size', default=32)
+    parser.add_argument('--learning_rate', default=1e-2)
     parser.add_argument('--gamma', default=0.95)
     parser.add_argument('--iteration', default=int(1e4))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
@@ -40,9 +41,14 @@ def main(args):
     Old_Policy = Policy_dcgan('old_policy', obs_shape=obs_shape, decode=True)
 
     # ppo学習インスタンス
-    PPO = PPOTrain(Policy, Old_Policy, obs_shape=obs_shape, gamma=args.gamma)
+    PPO = PPOTrain(
+            Policy,
+            Old_Policy,
+            obs_shape=obs_shape,
+            gamma=args.gamma,
+            lr=args.learning_rate)
     # discriminator
-    D = Discriminator(obs_shape=obs_shape)
+    D = Discriminator(obs_shape=obs_shape, lr=args.learning_rate)
 
     # tensorflow saver
     saver = tf.train.Saver()
@@ -60,8 +66,9 @@ def main(args):
         sess.run(tf.global_variables_initializer())
         # episode loop
         for iteration in tqdm(range(args.iteration)):
-            # create batch
+            # create batch 0~1
             expert_batch = next(gen)
+            expert_batch = expert_batch / 255
             # first 3 frame
             agent_batch = expert_batch[:,:3,:,:,:]
 
@@ -107,15 +114,14 @@ def main(args):
 
             # discriminator
             D_step = 2
-            D_expert = np.random.randint(low=0, high=5, size=D_step)
-            D_agent = np.random.randint(low=0, high=len(observations), size=D_step)
-            for i in range(D_step):
+            D_indices = np.random.randint(low=0, high=7, size=D_step, dtype=np.int8)
+            for i in D_indices:
                 # expert input
-                expert_obs = expert_batch[:,D_expert[i]:D_expert[i]+3,:,:,:]
-                expert_obs_next = expert_batch[:,D_expert[i]+1:D_expert[i]+4,:,:,:]
+                expert_obs = expert_batch[:,i:i+3,:,:,:]
+                expert_obs_next = expert_batch[:,i+1:i+4,:,:,:]
                 # agent input
-                agent_obs = observations[D_agent[i]]
-                agent_obs_next = next_observations[D_agent[i]]
+                agent_obs = observations[i]
+                agent_obs_next = next_observations[i]
                 # run discriminator train
                 D.train(expert_s=expert_obs,
                         expert_a=expert_obs_next,
@@ -138,7 +144,7 @@ def main(args):
             PPO.assign_policy_parameters()
 
             # sample index
-            PPO_step = 6
+            PPO_step = 2
             sample_indices = np.random.randint(
                     low=0,
                     high=len(observations),
@@ -164,6 +170,10 @@ def main(args):
 
             # add summary
             writer.add_summary(summary, iteration)
+
+            # save trained model
+            if (iteration+1) % 1000 == 0:
+                saver.save(sess, args.savedir+'/model-{}.ckpt'.format(iteration))
         writer.close()
 
 

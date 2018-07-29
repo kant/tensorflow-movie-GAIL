@@ -2,7 +2,7 @@ import tensorflow as tf
 
 
 class Discriminator:
-    def __init__(self, obs_shape):
+    def __init__(self, obs_shape, lr):
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
@@ -53,7 +53,7 @@ class Discriminator:
                 tf.summary.scalar('discriminator', loss)
 
             # optimize operation
-            optimizer = tf.train.AdamOptimizer()
+            optimizer = tf.train.AdamOptimizer(learning_rate=lr, epsilon=1e-5)
             self.train_op = optimizer.minimize(loss)
 
             # fix discriminator and get d_reward
