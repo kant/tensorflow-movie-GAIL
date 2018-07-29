@@ -18,7 +18,7 @@ def argparser():
     parser.add_argument('--savedir', help='save directory', default='trained_models/gail')
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--gamma', default=0.95)
-    parser.add_argument('--iteration', default=int(1e3))
+    parser.add_argument('--iteration', default=int(1e4))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
 
