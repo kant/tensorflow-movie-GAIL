@@ -15,46 +15,50 @@ class Discriminator:
             # expert state placeholder
             self.expert_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # expert action placeholder
-            self.expert_a = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
+            self.expert_s_next = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # add noise to expert action
-            #self.expert_a += tf.random_normal(tf.shape(self.expert_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            #self.expert_s_next += tf.random_normal(tf.shape(self.expert_s_next), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
-            expert_s_a = tf.concat([self.expert_s, self.expert_a], axis=1)
+            expert_policy = tf.concat([self.expert_s, self.expert_s_next], axis=1)
 
             # agent state placeholder
             self.agent_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # agent action placeholder
-            self.agent_a = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
+            self.agent_s_next = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # add noise to agent action
-            #self.agent_a += tf.random_normal(tf.shape(self.agent_a), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
+            #self.agent_s_next += tf.random_normal(tf.shape(self.agent_s_next), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
-            agent_s_a = tf.concat([self.agent_s, self.agent_a], axis=1)
+            agent_policy = tf.concat([self.agent_s, self.agent_s_next], axis=1)
 
             with tf.variable_scope('network') as network_scope:
                 # state-action of expert
-                expert_prob = self.construct_network(input=expert_s_a)
+                expert_prob = self.construct_network(input=expert_policy)
                 # share parameter of same scope with expert and agent
                 network_scope.reuse_variables()
                 # state-action of agent
-                agent_prob = self.construct_network(input=agent_s_a)
+                agent_prob = self.construct_network(input=agent_policy)
 
             with tf.variable_scope('loss'):
                 # maximiz D(s,a), because expert rewards are bigger than agent rewards
                 loss_expert = tf.reduce_mean(tf.log(tf.clip_by_value(expert_prob, 0.01, 1)))
+                tf.summary.scalar('loss_expert', loss_expert)
 
                 # maximize 1-D(s,a), because agent rewards are smoller than expert rewards
                 loss_agent = tf.reduce_mean(tf.log(tf.clip_by_value(1 - agent_prob, 0.01, 1)))
+                tf.summary.scalar('loss_agent', loss_agent)
 
                 # inverse sign because tensorflow minimize loss
                 loss = loss_expert + loss_agent
                 loss = -loss
-
                 # add discriminator loss to summary
                 tf.summary.scalar('discriminator', loss)
 
             # optimize operation
             optimizer = tf.train.AdamOptimizer(learning_rate=lr, epsilon=1e-5)
             self.train_op = optimizer.minimize(loss)
+
+            # 全てのsummaryを取得するoperation
+            self.merged = tf.summary.merge_all()
 
             # fix discriminator and get d_reward
             self.rewards = tf.log(tf.clip_by_value(agent_prob, 1e-10, 1))
@@ -133,31 +137,41 @@ class Discriminator:
 
         return prob
 
-    def train(self, expert_s, expert_a, agent_s, agent_a):
+    def train(self, expert_s, expert_s_next, agent_s, agent_s_next):
         '''
         train discriminator function
-        expert_s, expert_a: state-action of expert
-        agent_s, agent_a: state-action of expert
+        expert_s, expert_s_next: state-action of expert
+        agent_s, agent_s_next: state-action of expert
         '''
         return tf.get_default_session().run(
                 self.train_op,
                 feed_dict={
                     self.expert_s: expert_s,
-                    self.expert_a: expert_a,
+                    self.expert_s_next: expert_s_next,
                     self.agent_s: agent_s,
-                    self.agent_a: agent_a})
+                    self.agent_s_next: agent_s_next})
 
-    def get_rewards(self, agent_s, agent_a):
+    def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next):
+        '''summary operation実行関数'''
+        return tf.get_default_session().run(
+                self.merged,
+                feed_dict={
+                    self.expert_s: expert_s,
+                    self.expert_s_next: expert_s_next,
+                    self.agent_s: agent_s,
+                    self.agent_s_next: agent_s_next})
+
+    def get_rewards(self, agent_s, agent_s_next):
         '''
         fix D and get rewards
         agent_s: agent state
-        agent_a: agent action
+        agent_s_next: agent action
         '''
         return tf.get_default_session().run(
                 self.rewards,
                 feed_dict={
                     self.agent_s: agent_s,
-                    self.agent_a: agent_a})
+                    self.agent_s_next: agent_s_next})
 
     def get_trainable_variables(self):
         '''get trainable paremeter function'''

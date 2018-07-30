@@ -10,7 +10,7 @@ class PPOTrain:
             Old_Policy,
             obs_shape,
             gamma=0.95,
-            lr=1e-2,
+            lr=1e-4,
             clip_value=0.2,
             c_1=1,
             c_2=0.01):
@@ -32,7 +32,6 @@ class PPOTrain:
 
         # prepare placeholder
         with tf.variable_scope('train_inp'):
-            self.actions = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape, name='actions')
             self.rewards = tf.placeholder(dtype=tf.float32, shape=[None,1], name='rewards')
             self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None,1], name='v_preds_next')
             self.gaes = tf.placeholder(dtype=tf.float32, shape=[None,1], name='gaes')
@@ -57,32 +56,32 @@ class PPOTrain:
             loss_clip = tf.minimum(
                     tf.multiply(self.gaes, ratios),
                     tf.multiply(self.gaes, clipped_ratios))
-            self.loss_clip = tf.reduce_mean(loss_clip)
+            loss_clip = tf.reduce_mean(loss_clip)
             # summaryにclipping lossを追加
-            tf.summary.scalar('loss_clip', self.loss_clip)
+            tf.summary.scalar('loss_clip', loss_clip)
 
             # 探索を促すためのentropy制約項
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            self.entropy = -tf.reduce_mean(act_probs * tf.log(
+            entropy = -tf.reduce_mean(act_probs * tf.log(
                 tf.clip_by_value(
                     act_probs,
                     1e-10,
                     1.0)))
-            tf.summary.scalar('entropy', self.entropy)
+            tf.summary.scalar('entropy', entropy)
 
             # 状態価値の分散を大きくしないための制約項
             v_preds = self.Policy.v_preds
             loss_vf = tf.squared_difference(self.rewards + self.gamma * self.v_preds_next, v_preds)
-            self.loss_vf = tf.reduce_mean(loss_vf)
-            tf.summary.scalar('value_difference', self.loss_vf)
+            loss_vf = tf.reduce_mean(loss_vf)
+            tf.summary.scalar('value_difference', loss_vf)
 
             # 以下の式を最大化
-            #loss = self.loss_clip - c_1 * self.loss_vf + c_2 * self.entropy
-            loss = self.loss_clip - c_1 * self.loss_vf
+            loss = loss_clip - c_1 * loss_vf + c_2 * entropy
+
 
             # tensorflowのoptimizerは最小最適化を行うため
-            self.loss = -loss
-            tf.summary.scalar('total', self.loss)
+            loss = -loss
+            tf.summary.scalar('total', loss)
 
         # 全てのsummaryを取得するoperation
         self.merged = tf.summary.merge_all()
@@ -90,30 +89,28 @@ class PPOTrain:
         # optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
         # 勾配の取得
-        self.gradients = optimizer.compute_gradients(self.loss, var_list=pi_trainable)
+        self.gradients = optimizer.compute_gradients(loss, var_list=pi_trainable)
         # train operation
-        self.train_op = optimizer.minimize(self.loss, var_list=pi_trainable)
+        self.train_op = optimizer.minimize(loss, var_list=pi_trainable)
 
-    def train(self, obs, actions, gaes, rewards, v_preds_next):
+    def train(self, obs , gaes, rewards, v_preds_next):
         '''train operation実行関数'''
         tf.get_default_session().run(
                 self.train_op,
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
-                    self.actions: actions,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
                     self.gaes: gaes})
 
-    def get_summary(self, obs, actions, gaes, rewards, v_preds_next):
+    def get_summary(self, obs , gaes, rewards, v_preds_next):
         '''summary operation実行関数'''
         return tf.get_default_session().run(
                 self.merged,
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
-                    self.actions: actions,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
                     self.gaes: gaes})
@@ -140,11 +137,10 @@ class PPOTrain:
             gaes[t] = gaes[t] + self.gamma * gaes[t + 1]
         return gaes
 
-    def get_grad(self, obs, actions, gaes, rewards, v_preds_next):
+    def get_grad(self, obs , gaes, rewards, v_preds_next):
         '''
         勾配計算関数
         obs: 状態
-        actions: 行動系列
         gaes: generative advantage estimator
         rewards: 即時報酬系列
         v_preds_next: 次の状態価値関数
@@ -154,7 +150,6 @@ class PPOTrain:
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
-                    self.actions: actions,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
                     self.gaes: gaes})

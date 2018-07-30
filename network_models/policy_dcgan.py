@@ -140,7 +140,7 @@ class Policy_dcgan:
                                     kernel_size=(5,5),
                                     strides=2,
                                     padding='same',
-                                    activation=tf.nn.sigmoid,
+                                    activation=None,
                                     name='deconv_mu')
                             mu = tf.nn.tanh(tf.layers.flatten(mu), name='mu')
 
@@ -151,7 +151,7 @@ class Policy_dcgan:
                                     kernel_size=(5,5),
                                     strides=2,
                                     padding='same',
-                                    activation=tf.nn.sigmoid,
+                                    activation=None,
                                     name='deconv_sigma')
                             sigma = tf.nn.softplus(tf.layers.flatten(sigma), name='sigma')
 
@@ -160,19 +160,21 @@ class Policy_dcgan:
                                     loc=mu,
                                     scale_diag=sigma,
                                     name='dist')
+                            '''
+                            dist = tf.contrib.distributions.Normal(
+                                    loc=mu,
+                                    scale=sigma,
+                                    name='dist')
+                            '''
+                            dist = tf.contrib.distributions.Independent(dist, reduce_batch_ndims=0)
 
                             # sampling operarion
-                            sample = tf.squeeze(dist.sample(1), axis=0)
-                            self.sample_act_op = tf.reshape(
-                                    sample,
-                                    shape=[-1,1]+obs_shape[1:],
-                                    name='sample_act_op')
+                            self.sample_act_op = tf.squeeze(dist.sample(1), axis=0)
 
+                            # prob operation
+                            self.act_probs_op = dist.prob(self.sample_act_op, name='act_prob_op')
 
-                            # get action prob operation
-                            self.act_probs_op = dist.prob(sample, name='act_probs')
-
-
+                            self.test_op = self.act_probs_op
 
             # value network
             with tf.variable_scope('value_net'):
@@ -180,8 +182,7 @@ class Policy_dcgan:
                     # 3x64x64x1 -> 3x16x16x64
                     with tf.variable_scope('enc_1'):
                         x = tf.layers.conv3d(
-                                inputs=self.obs,
-                                filters=64,
+                                inputs=self.obs, filters=64,
                                 kernel_size=(3,5,5),
                                 strides=(1,4,4),
                                 padding='same',
@@ -238,8 +239,7 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        x = tf.reshape(x, shape=[-1,1])
-                        self.v_preds = tf.nn.sigmoid(x, name='v_preds')
+                        self.v_preds = tf.reshape(x, shape=[-1,1], name='v_preds')
 
             # get network scope name
             self.scope = tf.get_variable_scope().name
@@ -254,15 +254,6 @@ class Policy_dcgan:
                 [self.sample_act_op, self.v_preds],
                 feed_dict={self.obs: obs})
 
-    def get_action_probs(self, obs):
-        '''
-        get action prob conditioned from state
-        obs: stacked state image
-        '''
-        return tf.get_default_session().run(
-                self.act_probs_op,
-                feed_dict={self.obs: obs})
-
     def get_variables(self):
         '''get param function'''
         return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, self.scope)
@@ -272,9 +263,7 @@ class Policy_dcgan:
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
 
     def test_run(self, obs):
-        '''
-        test run
-        '''
+        '''train operation実行関数'''
         return tf.get_default_session().run(
-                tf.shape(self.act_probs_op),
+                self.test_op,
                 feed_dict={self.obs: obs})
