@@ -142,7 +142,8 @@ class Policy_dcgan:
                                     padding='same',
                                     activation=None,
                                     name='deconv_mu')
-                            mu = tf.nn.tanh(tf.layers.flatten(mu), name='mu')
+                            #mu = tf.nn.tanh(tf.layers.flatten(mu), name='mu')
+                            mu = tf.layers.flatten(mu, name='mu')
 
                             # inference action std
                             sigma = tf.layers.conv2d_transpose(
@@ -153,7 +154,8 @@ class Policy_dcgan:
                                     padding='same',
                                     activation=None,
                                     name='deconv_sigma')
-                            sigma = tf.nn.softplus(tf.layers.flatten(sigma), name='sigma')
+                            #sigma = tf.nn.softplus(tf.layers.flatten(sigma), name='sigma')
+                            sigma = tf.layers.flatten(sigma, name='sigma')
 
                             # action space distribution
                             dist = tf.contrib.distributions.MultivariateNormalDiag(
@@ -166,7 +168,7 @@ class Policy_dcgan:
                                     scale=sigma,
                                     name='dist')
                             '''
-                            dist = tf.contrib.distributions.Independent(dist, reduce_batch_ndims=0)
+                            #dist = tf.contrib.distributions.Independent(dist, reduce_batch_ndims=0)
 
                             # sampling operarion
                             self.sample_act_op = tf.squeeze(dist.sample(1), axis=0)
@@ -174,6 +176,7 @@ class Policy_dcgan:
                             # prob operation
                             self.act_probs_op = dist.prob(self.sample_act_op, name='act_prob_op')
 
+                            # test operation
                             self.test_op = self.act_probs_op
 
             # value network
