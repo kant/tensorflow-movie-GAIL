@@ -114,7 +114,7 @@ def main(args):
 
                 # create next_obs
                 act = np.reshape(act, (args.batch_size,1,64,64,1))
-                agent_batch_next = np.concatenate([agent_batch[:,1:,:,:,:], act], axis=1)
+                agent_batch_next = np.concatenate([agent_batch[:,1:3,:,:,:], act], axis=1)
                 next_observations.append(agent_batch_next)
 
 
@@ -154,7 +154,7 @@ def main(args):
                         expert_s_next=expert_obs_next,
                         agent_s=agent_obs,
                         agent_s_next=agent_obs_next)
-            '''
+
             # get Discriminator summary
             D_summary = D.get_summary(
                     expert_s=expert_batch[:,6:9,:,:,:],
@@ -163,7 +163,6 @@ def main(args):
                     agent_s_next=agent_batch_next[-1])
             # add Discriminator summary
             writer.add_summary(D_summary, iteration)
-            '''
 
             # updata policy using PPO
             # get d_rewards from discrminator
@@ -181,7 +180,7 @@ def main(args):
             PPO.assign_policy_parameters()
 
             # sample index
-            PPO_step = 2
+            PPO_step = 6
             sample_indices = np.random.randint(
                     low=0,
                     high=len(observations),

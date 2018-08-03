@@ -12,7 +12,7 @@ class PPOTrain:
             gamma=0.95,
             lr=1e-4,
             clip_value=0.2,
-            c_1=1,
+            c_1=0.2,
             c_2=0.01):
         # Policy network
         self.Policy = Policy
@@ -41,12 +41,11 @@ class PPOTrain:
         act_probs_old = self.Old_Policy.act_probs_op
 
         with tf.variable_scope('loss'):
-            # ratios = tf.divide(act_probs, act_probs_old)
+            # 更新後の方策と更新前の方策のKL距離の制約
             # trust regionを計算 をpi(a|s)/pi_old(a|s)
-            # 更新後の方策と更新前の方策のKL距離の制約を与える
-            ratios = tf.exp(
-                    tf.log(
-                        tf.clip_by_value(act_probs, 1e-10, 1.0)) - tf.log(tf.clip_by_value(act_probs_old, 1e-10, 1.0)))
+            # ratio = tf.div(act_probs, act_probs_old)
+            # 収益期待値->最大化
+            ratios = tf.exp(tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)) - tf.log(tf.clip_by_value(act_probs_old, 1e-10, 1.0)))
             # clipping ratios
             clipped_ratios = tf.clip_by_value(
                     ratios,
@@ -60,16 +59,12 @@ class PPOTrain:
             # summaryにclipping lossを追加
             tf.summary.scalar('loss_clip', loss_clip)
 
-            # 探索を促すためのentropy制約項
+            # 探索を促すためのentropy制約項->entropy最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = -tf.reduce_mean(act_probs * tf.log(
-                tf.clip_by_value(
-                    act_probs,
-                    1e-10,
-                    1.0)))
+            entropy = -tf.reduce_mean(act_probs * tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)))
             tf.summary.scalar('entropy', entropy)
 
-            # 状態価値の分散を大きくしないための制約項
+            # 状態価値の分散を大きくしないための制約項->最小化
             v_preds = self.Policy.v_preds
             loss_vf = tf.squared_difference(self.rewards + self.gamma * self.v_preds_next, v_preds)
             loss_vf = tf.reduce_mean(loss_vf)

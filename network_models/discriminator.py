@@ -2,6 +2,10 @@ import tensorflow as tf
 
 
 class Discriminator:
+    '''Generative Advesarial Imitation Learning'''
+    # relu or leaky_relu
+    nonlinear = tf.nn.leaky_relu
+    #nonlinear = tf.nn.relu
     def __init__(self, obs_shape, lr):
         """
         visual forecasting by imitation learning class
@@ -16,8 +20,6 @@ class Discriminator:
             self.expert_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # expert action placeholder
             self.expert_s_next = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
-            # add noise to expert action
-            #self.expert_s_next += tf.random_normal(tf.shape(self.expert_s_next), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
             expert_policy = tf.concat([self.expert_s, self.expert_s_next], axis=1)
 
@@ -25,8 +27,6 @@ class Discriminator:
             self.agent_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
             # agent action placeholder
             self.agent_s_next = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
-            # add noise to agent action
-            #self.agent_s_next += tf.random_normal(tf.shape(self.agent_s_next), mean=0.2, stddev=0.1, dtype=tf.float32)/1.2
             # concatenate state and action to input discriminator
             agent_policy = tf.concat([self.agent_s, self.agent_s_next], axis=1)
 
@@ -79,7 +79,8 @@ class Discriminator:
                     padding='same',
                     activation=None,
                     name='conv')
-            x = tf.nn.relu(x, name='relu')
+            x = nonlinear(x, name='nonlin')
+            #x = tf.nn.relu(x, name='relu')
 
         with tf.variable_scope('block_2'):
             # 6x16x16x64 -> 6x8x8x128
@@ -92,7 +93,8 @@ class Discriminator:
                     activation=None,
                     name='conv')
             x = tf.layers.batch_normalization(x, name='BN')
-            x = tf.nn.relu(x, name='relu')
+            x = nonlinear(x, name='nonlin')
+            #x = tf.nn.relu(x, name='relu')
 
         with tf.variable_scope('block_3'):
             # 6x8x8x128 -> 6x4x4x256
@@ -105,7 +107,8 @@ class Discriminator:
                     activation=None,
                     name='conv')
             x = tf.layers.batch_normalization(x, name='BN')
-            x = tf.nn.relu(x, name='relu')
+            x = nonlinear(x, name='nonlin')
+            #x = tf.nn.relu(x, name='relu')
 
         with tf.variable_scope('block_4'):
             # 6x4x4x256 -> 6x2x2x512
@@ -118,7 +121,8 @@ class Discriminator:
                     activation=None,
                     name='conv')
             x = tf.layers.batch_normalization(x, name='BN')
-            x = tf.nn.relu(x, name='relu')
+            x = nonlinear(x, name='nonlin')
+            #x = tf.nn.relu(x, name='relu')
 
         with tf.variable_scope('block_5'):
             # 6x2x2x512 -> 1x1x1x1
