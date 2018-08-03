@@ -17,6 +17,7 @@ def argparser():
     parser.add_argument('--logdir', help='log directory', default='log/train')
     parser.add_argument('--savedir', help='save directory', default='trained_models')
     parser.add_argument('--algo', default='gail')
+    parser.add_argument('--leaky', default=True)
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--learning_rate', default=1e-2)
     parser.add_argument('--gamma', default=0.95)
@@ -55,12 +56,13 @@ def main(args):
     Policy = Policy_dcgan(
             'policy',
             obs_shape=obs_shape,
-            decode=True)
+            decode=True,
+            leaky=args.leaky)
     Old_Policy = Policy_dcgan(
             'old_policy',
             obs_shape=obs_shape,
-            decode=True)
-
+            decode=True,
+            leaky=args.leaky)
     # ppo学習インスタンス
     PPO = PPOTrain(
             Policy,
@@ -68,8 +70,12 @@ def main(args):
             obs_shape=obs_shape,
             gamma=args.gamma,
             lr=args.learning_rate)
+
     # discriminator
-    D = Discriminator(obs_shape=obs_shape, lr=args.learning_rate)
+    D = Discriminator(
+            obs_shape=obs_shape,
+            lr=args.learning_rate,
+            leaky=args.leaky)
 
     # tensorflow saver
     saver = tf.train.Saver()
@@ -133,7 +139,7 @@ def main(args):
             writer.add_summary(
                     tf.Summary(value=[tf.Summary.Value(
                         tag='episode_reward',
-                        simple_value=sum(rewards[0]))]),
+                        simple_value=sum(rewards[-1]))]),
                     iteration)
 
             # discriminator
@@ -150,19 +156,25 @@ def main(args):
                 agent_obs = observations[idx]
                 agent_obs_next = next_observations[idx]
                 # run discriminator train operation
-                D.train(expert_s=expert_obs,
+                _, D_loss = D.train(expert_s=expert_obs,
                         expert_s_next=expert_obs_next,
                         agent_s=agent_obs,
                         agent_s_next=agent_obs_next)
+                #print(D_loss)
 
+            '''
+            print(expert_batch[:,7:10,:,:,:].shape)
             # get Discriminator summary
             D_summary = D.get_summary(
                     expert_s=expert_batch[:,6:9,:,:,:],
                     expert_s_next=expert_batch[:,7:10,:,:,:],
-                    agent_s=agent_batch[-1],
-                    agent_s_next=agent_batch_next[-1])
+                    agent_s=observations[-1],
+                    agent_s_next=next_observations[-1]
+                    )
             # add Discriminator summary
             writer.add_summary(D_summary, iteration)
+            print('D summaey done!!!!!!!!!!!!')
+            '''
 
             # updata policy using PPO
             # get d_rewards from discrminator
@@ -171,9 +183,11 @@ def main(args):
                 d_reward = D.get_rewards(agent_s=observations[i], agent_s_next=next_observations[i])
                 # transform d_rewards to numpy for placeholder
                 d_rewards.append(d_reward)
+            #print(d_rewards)
 
             # get generalized advantage estimator
             gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
+            #gaes = [r_t + 0.95*v - v_next for r_t, v, v_next in zip(d_rewards, v_preds, v_preds_next)]
             # gae = (gaes - gaes.mean()) / gaes.std()
 
             # assign parameters to old policy
@@ -189,11 +203,19 @@ def main(args):
             # train PPO
             for i, idx in enumerate(sample_indices):
                 # run ppo train operation
-                PPO.train(
+                #_, PPO_loss, PPO_clip, PPO_vf, PPO_entropy = PPO.train(
+                PPO_losses = PPO.train(
                         obs=observations[idx],
                         gaes=gaes[idx],
                         rewards=d_rewards[idx],
                         v_preds_next=v_preds_next[idx])
+                gradients = PPO.get_grad(
+                        obs=observations[idx],
+                        gaes=gaes[idx],
+                        rewards=d_rewards[idx],
+                        v_preds_next=v_preds_next[idx])
+            print(len(gradients))
+            print(gradients[0])
 
             # get PPO summary
             PPO_summary = PPO.get_summary(

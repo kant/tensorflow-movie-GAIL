@@ -19,7 +19,6 @@ class PPOTrain:
         self.Old_Policy = Old_Policy
         self.gamma = gamma
         self.lr = lr
-
         # 学習可能な変数の取得
         pi_trainable = self.Policy.get_trainable_variables()
         old_pi_trainable = self.Old_Policy.get_trainable_variables()
@@ -55,28 +54,28 @@ class PPOTrain:
             loss_clip = tf.minimum(
                     tf.multiply(self.gaes, ratios),
                     tf.multiply(self.gaes, clipped_ratios))
-            loss_clip = tf.reduce_mean(loss_clip)
+            self.loss_clip = tf.reduce_mean(loss_clip)
             # summaryにclipping lossを追加
-            tf.summary.scalar('loss_clip', loss_clip)
+            tf.summary.scalar('loss_clip', self.loss_clip)
 
             # 探索を促すためのentropy制約項->entropy最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = -tf.reduce_mean(act_probs * tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)))
-            tf.summary.scalar('entropy', entropy)
+            self.entropy = -tf.reduce_mean(act_probs * tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)))
+            tf.summary.scalar('entropy', self.entropy)
 
             # 状態価値の分散を大きくしないための制約項->最小化
             v_preds = self.Policy.v_preds
             loss_vf = tf.squared_difference(self.rewards + self.gamma * self.v_preds_next, v_preds)
-            loss_vf = tf.reduce_mean(loss_vf)
-            tf.summary.scalar('value_difference', loss_vf)
+            self.loss_vf = tf.reduce_mean(loss_vf)
+            tf.summary.scalar('value_difference', self.loss_vf)
 
             # 以下の式を最大化
-            loss = loss_clip - c_1 * loss_vf + c_2 * entropy
+            loss = self.loss_clip - c_1 * self.loss_vf + c_2 * self.entropy
 
 
             # tensorflowのoptimizerは最小最適化を行うため
-            loss = -loss
-            tf.summary.scalar('total', loss)
+            self.loss = -loss
+            tf.summary.scalar('total', self.loss)
 
         # 全てのsummaryを取得するoperation
         self.merged = tf.summary.merge_all()
@@ -84,14 +83,14 @@ class PPOTrain:
         # optimizer
         optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
         # 勾配の取得
-        self.gradients = optimizer.compute_gradients(loss, var_list=pi_trainable)
+        self.gradients = optimizer.compute_gradients(self.loss, var_list=pi_trainable)
         # train operation
-        self.train_op = optimizer.minimize(loss, var_list=pi_trainable)
+        self.train_op = optimizer.minimize(self.loss, var_list=pi_trainable)
 
     def train(self, obs , gaes, rewards, v_preds_next):
         '''train operation実行関数'''
-        tf.get_default_session().run(
-                self.train_op,
+        return tf.get_default_session().run(
+                [self.train_op, self.loss, self.loss_clip, self.loss_vf, self.entropy],
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,

@@ -3,14 +3,12 @@ import tensorflow as tf
 
 class Policy_dcgan:
     '''encoder decoder policy network'''
-    # relu or leaky_relu
-    nonlinear = tf.nn.leaky_relu
-    #nonlinear = tf.nn.relu
-    def __init__(self, name, obs_shape, decode=True):
+    def __init__(self, name, obs_shape, decode=True, leaky=True):
 
         with tf.variable_scope(name):
             # placeholder for input state
             self.obs = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape, name='obs')
+            self.leaky = leaky
 
             # policy network
             with tf.variable_scope('policy_net'):
@@ -25,8 +23,10 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x32x32x64 -> 3x16x16x128
                     with tf.variable_scope('enc_2'):
@@ -39,8 +39,10 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x16x16x128 -> 3x8x8x256
                     with tf.variable_scope('enc_3'):
@@ -53,8 +55,10 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x8x8x256 -> 3x4x4x512
                     with tf.variable_scope('enc_4'):
@@ -67,8 +71,10 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x4x4x512 -> 2x2x512
                     with tf.variable_scope('enc_5'):
@@ -80,8 +86,10 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        x = nonlinear(x, name='nonlin')
-                        x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
                         self.enc_feature = tf.reshape(x, shape=[-1,2,2,512])
 
                 if decode:
@@ -97,8 +105,10 @@ class Policy_dcgan:
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
-                            x = nonlinear(x, name='nonlin')
-                            #x = tf.nn.relu(x, name='relu')
+                            if self.leaky:
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            else:
+                                x = tf.nn.relu(x, name='nonlinear')
 
                         # 4x4x512 -> 8x8x256
                         with tf.variable_scope('dec_2'):
@@ -111,8 +121,10 @@ class Policy_dcgan:
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
-                            x = nonlinear(x, name='nonlin')
-                            #x = tf.nn.relu(x, name='relu')
+                            if self.leaky:
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            else:
+                                x = tf.nn.relu(x, name='nonlinear')
 
                         # 8x8x256 -> 16x16x128
                         with tf.variable_scope('dec_3'):
@@ -125,8 +137,10 @@ class Policy_dcgan:
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
-                            x = nonlinear(x, name='nonlin')
-                            #x = tf.nn.relu(x, name='relu')
+                            if self.leaky:
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            else:
+                                x = tf.nn.relu(x, name='nonlinear')
 
                         # 16x16x128 -> 32x32x64
                         with tf.variable_scope('dec_4'):
@@ -139,8 +153,10 @@ class Policy_dcgan:
                                     activation=None,
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
-                            x = nonlinear(x, name='nonlin')
-                            #x = tf.nn.relu(x, name='relu')
+                            if self.leaky:
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            else:
+                                x = tf.nn.relu(x, name='nonlinear')
 
                         # 32x32x64 -> 64x64x1
                         with tf.variable_scope('dec_5'):
@@ -165,22 +181,18 @@ class Policy_dcgan:
                                     padding='same',
                                     activation=None,
                                     name='deconv_sigma')
-                            #sigma = tf.nn.softplus(tf.layers.flatten(sigma), name='sigma')
-                            sigma = tf.layers.flatten(tf.clip_by_value(sigma, 1e-10, 10.0), name='sigma')
+                            sigma = tf.clip_by_value(
+                                    tf.nn.softplus(tf.layers.flatten(sigma)),
+                                    1e-10,
+                                    3.0,
+                                    name='sigma')
 
                             # action space distribution
                             dist = tf.contrib.distributions.MultivariateNormalDiag(
-                                    loc=tf.zeros(shape=tf.shape(mu)),
-                                    scale_diag=tf.ones(shape=tf.shape(sigma)),
+                                    loc=tf.zeros(tf.shape(mu)),
+                                    scale_diag=tf.ones(tf.shape(sigma)),
                                     allow_nan_stats=False,
                                     name='dist')
-                            '''
-                            dist = tf.distributions.Normal(
-                                    loc=mu,
-                                    scale=sigma,
-                                    name='dist'
-                                    )
-                            '''
 
 
                             if tf.__version__ == '1.4.0':
@@ -192,12 +204,12 @@ class Policy_dcgan:
                             print('distribution event shape: ', dist.event_shape)
 
                             # sampling seed
-                            #seed = dist.sample()
-                            #self.sample_act_op = mu + seed * sigma
-                            self.sample_act_op = dist.sample()
+                            seed = dist.sample()
+                            self.sample_act_op = mu + seed * sigma
 
+                            '''tensorflowのprobはbackpropできないため自分で実装'''
                             # prob operation
-                            self.act_probs_op = dist.prob(self.sample_act_op, name='act_probs_op')
+                            #self.act_probs_op = dist.prob(self.sample_act_op, name='act_probs_op')
 
                             # test operation
                             self.test_op = self.act_probs_op
@@ -214,8 +226,10 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x16x16x64 -> 3x8x8x128
                     with tf.variable_scope('enc_2'):
@@ -228,8 +242,10 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x8x8x128 -> 3x4x4x256
                     with tf.variable_scope('enc_3'):
@@ -242,8 +258,10 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x4x4x256 -> 3x2x2x512
                     with tf.variable_scope('enc_4'):
@@ -256,8 +274,10 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
-                        x = nonlinear(x, name='nonlin')
-                        #x = tf.nn.relu(x, name='relu')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                        else:
+                            x = tf.nn.relu(x, name='nonlinear')
 
                     # 3x2x2x512 -> 1x1x1x1
                     with tf.variable_scope('enc_5'):
@@ -273,6 +293,11 @@ class Policy_dcgan:
 
             # get network scope name
             self.scope = tf.get_variable_scope().name
+
+    def prob_density_func(self, sample, mean, std):
+        
+
+
 
     def act(self, obs):
         '''

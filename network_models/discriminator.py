@@ -3,14 +3,12 @@ import tensorflow as tf
 
 class Discriminator:
     '''Generative Advesarial Imitation Learning'''
-    # relu or leaky_relu
-    nonlinear = tf.nn.leaky_relu
-    #nonlinear = tf.nn.relu
-    def __init__(self, obs_shape, lr):
+    def __init__(self, obs_shape, lr, leaky=True):
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
         """
+        self.leaky = leaky
 
         with tf.variable_scope('discriminator'):
             # get vaiable scope name
@@ -49,13 +47,13 @@ class Discriminator:
 
                 # inverse sign because tensorflow minimize loss
                 loss = loss_expert + loss_agent
-                loss = -loss
+                self.loss = -loss
                 # add discriminator loss to summary
-                tf.summary.scalar('discriminator', loss)
+                tf.summary.scalar('discriminator', self.loss)
 
             # optimize operation
             optimizer = tf.train.AdamOptimizer(learning_rate=lr, epsilon=1e-5)
-            self.train_op = optimizer.minimize(loss)
+            self.train_op = optimizer.minimize(self.loss)
 
             # 全てのsummaryを取得するoperation
             self.merged = tf.summary.merge_all()
@@ -79,8 +77,10 @@ class Discriminator:
                     padding='same',
                     activation=None,
                     name='conv')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
+            if self.leaky:
+                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+            else:
+                x = tf.nn.relu(x, name='nonlinear')
 
         with tf.variable_scope('block_2'):
             # 6x16x16x64 -> 6x8x8x128
@@ -93,8 +93,10 @@ class Discriminator:
                     activation=None,
                     name='conv')
             x = tf.layers.batch_normalization(x, name='BN')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
+            if self.leaky:
+                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+            else:
+                x = tf.nn.relu(x, name='nonlinear')
 
         with tf.variable_scope('block_3'):
             # 6x8x8x128 -> 6x4x4x256
@@ -107,8 +109,10 @@ class Discriminator:
                     activation=None,
                     name='conv')
             x = tf.layers.batch_normalization(x, name='BN')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
+            if self.leaky:
+                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+            else:
+                x = tf.nn.relu(x, name='nonlinear')
 
         with tf.variable_scope('block_4'):
             # 6x4x4x256 -> 6x2x2x512
@@ -121,8 +125,10 @@ class Discriminator:
                     activation=None,
                     name='conv')
             x = tf.layers.batch_normalization(x, name='BN')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
+            if self.leaky:
+                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+            else:
+                x = tf.nn.relu(x, name='nonlinear')
 
         with tf.variable_scope('block_5'):
             # 6x2x2x512 -> 1x1x1x1
@@ -148,7 +154,7 @@ class Discriminator:
         agent_s, agent_s_next: state-action of expert
         '''
         return tf.get_default_session().run(
-                self.train_op,
+                [self.train_op, self.loss],
                 feed_dict={
                     self.expert_s: expert_s,
                     self.expert_s_next: expert_s_next,
