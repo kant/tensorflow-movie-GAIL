@@ -19,7 +19,7 @@ def argparser():
     parser.add_argument('--algo', default='gail')
     parser.add_argument('--leaky', default=True)
     parser.add_argument('--batch_size', default=32)
-    parser.add_argument('--learning_rate', default=1e-2)
+    parser.add_argument('--learning_rate', default=1e-4)
     parser.add_argument('--gamma', default=0.95)
     parser.add_argument('--iteration', default=int(1e4))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
@@ -101,7 +101,7 @@ def main(args):
             agent_batch = expert_batch[:,:3,:,:,:]
 
             # test
-            print('test: ', Policy.test_run(agent_batch))
+            #print('test: ', Policy.test_run(agent_batch))
 
             # buffer
             observations = []
@@ -160,7 +160,7 @@ def main(args):
                         expert_s_next=expert_obs_next,
                         agent_s=agent_obs,
                         agent_s_next=agent_obs_next)
-                #print(D_loss)
+            print('D_loss: ', D_loss)
 
             '''
             print(expert_batch[:,7:10,:,:,:].shape)
@@ -187,7 +187,6 @@ def main(args):
 
             # get generalized advantage estimator
             gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
-            #gaes = [r_t + 0.95*v - v_next for r_t, v, v_next in zip(d_rewards, v_preds, v_preds_next)]
             # gae = (gaes - gaes.mean()) / gaes.std()
 
             # assign parameters to old policy
@@ -204,7 +203,7 @@ def main(args):
             for i, idx in enumerate(sample_indices):
                 # run ppo train operation
                 #_, PPO_loss, PPO_clip, PPO_vf, PPO_entropy = PPO.train(
-                PPO_losses = PPO.train(
+                _, total_loss, clip_loss, vf_loss, entropy_loss = PPO.train(
                         obs=observations[idx],
                         gaes=gaes[idx],
                         rewards=d_rewards[idx],
@@ -214,8 +213,8 @@ def main(args):
                         gaes=gaes[idx],
                         rewards=d_rewards[idx],
                         v_preds_next=v_preds_next[idx])
-            print(len(gradients))
-            print(gradients[0])
+            print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {}'.format(
+                total_loss, clip_loss, vf_loss, entropy_loss))
 
             # get PPO summary
             PPO_summary = PPO.get_summary(

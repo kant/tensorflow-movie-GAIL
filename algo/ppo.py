@@ -35,16 +35,15 @@ class PPOTrain:
             self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None,1], name='v_preds_next')
             self.gaes = tf.placeholder(dtype=tf.float32, shape=[None,1], name='gaes')
 
-        # pi(a|s)を取得
-        act_probs = self.Policy.act_probs_op
-        act_probs_old = self.Old_Policy.act_probs_op
+        # distributionを取得 probs shape(batch_size, 4094)
+        act_probs = self.Policy.act_probs
+        act_probs_old = self.Old_Policy.act_probs
 
         with tf.variable_scope('loss'):
             # 更新後の方策と更新前の方策のKL距離の制約
-            # trust regionを計算 をpi(a|s)/pi_old(a|s)
             # ratio = tf.div(act_probs, act_probs_old)
             # 収益期待値->最大化
-            ratios = tf.exp(tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)) - tf.log(tf.clip_by_value(act_probs_old, 1e-10, 1.0)))
+            ratios = tf.exp(tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0))-tf.log(tf.clip_by_value(act_probs_old, 1e-10, 1.0)))
             # clipping ratios
             clipped_ratios = tf.clip_by_value(
                     ratios,
@@ -52,15 +51,19 @@ class PPOTrain:
                     clip_value_max=1 + clip_value)
             # clipping前とclipping後のlossで小さい方を使う
             loss_clip = tf.minimum(
-                    tf.multiply(self.gaes, ratios),
-                    tf.multiply(self.gaes, clipped_ratios))
-            self.loss_clip = tf.reduce_mean(loss_clip)
+                    tf.reduce_mean(tf.multiply(self.gaes, ratios)),
+                    tf.reduce_mean(tf.multiply(self.gaes, clipped_ratios)))
+            loss_clip = tf.reduce_mean(loss_clip)
+            # tensorflow用に反転
+            self.loss_clip = - loss_clip
             # summaryにclipping lossを追加
             tf.summary.scalar('loss_clip', self.loss_clip)
 
-            # 探索を促すためのentropy制約項->entropy最大化
+            # 探索を促すためのentropy制約項->最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            self.entropy = -tf.reduce_mean(act_probs * tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)))
+            entropy = - tf.reduce_mean(tf.reduce_mean(act_probs * tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0))))
+            # tensorflow用に反転
+            self.entropy = - entropy
             tf.summary.scalar('entropy', self.entropy)
 
             # 状態価値の分散を大きくしないための制約項->最小化
@@ -69,23 +72,24 @@ class PPOTrain:
             self.loss_vf = tf.reduce_mean(loss_vf)
             tf.summary.scalar('value_difference', self.loss_vf)
 
-            # 以下の式を最大化
-            loss = self.loss_clip - c_1 * self.loss_vf + c_2 * self.entropy
-
-
+            # 以下の式を最小化
+            self.loss = self.loss_clip + c_1 * self.loss_vf + c_2 * self.entropy
             # tensorflowのoptimizerは最小最適化を行うため
-            self.loss = -loss
             tf.summary.scalar('total', self.loss)
+
+
+        # optimizer
+        # optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
+        optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.0)
+
+        # 勾配の取得
+        self.gradients = optimizer.compute_gradients(self.loss, var_list=pi_trainable)
+
+        # train operation
+        self.train_op = optimizer.minimize(self.loss, var_list=pi_trainable)
 
         # 全てのsummaryを取得するoperation
         self.merged = tf.summary.merge_all()
-
-        # optimizer
-        optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
-        # 勾配の取得
-        self.gradients = optimizer.compute_gradients(self.loss, var_list=pi_trainable)
-        # train operation
-        self.train_op = optimizer.minimize(self.loss, var_list=pi_trainable)
 
     def train(self, obs , gaes, rewards, v_preds_next):
         '''train operation実行関数'''
