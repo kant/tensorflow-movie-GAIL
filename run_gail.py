@@ -20,7 +20,7 @@ def argparser():
     parser.add_argument('--leaky', default=True)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--gamma', default=0.95, type=float)
-    parser.add_argument('--learning_rate', default=1e-4, )
+    parser.add_argument('--learning_rate', default=1e-4)
     parser.add_argument('--c_vf', default=0.2, type=float)
     parser.add_argument('--c_entropy', default=0.01, type=float)
     parser.add_argument('--iteration', default=1e3, type=int)
