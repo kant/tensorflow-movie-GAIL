@@ -20,10 +20,10 @@ def argparser():
     parser.add_argument('--leaky', default=True)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--gamma', default=0.95, type=float)
-    parser.add_argument('--learning_rate', default=1e-4)
+    parser.add_argument('--learning_rate', default=1e-4, type=float)
     parser.add_argument('--c_vf', default=0.2, type=float)
     parser.add_argument('--c_entropy', default=0.01, type=float)
-    parser.add_argument('--iteration', default=1e3, type=int)
+    parser.add_argument('--iteration', default=int(1e3), type=int)
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
 
@@ -38,15 +38,15 @@ def main(args):
     ckpt_counter = len([ckpt_dir for ckpt_dir in os.listdir(args.savedir) if args.algo in ckpt_dir])
     model_dir = args.savedir + '/' + args.algo + '_' + str(ckpt_counter + 1)
     # create trained model dir
-    if not os.path.exists(args.savedir):
+    if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
     # log counter
     log_counter = len([log_dir for log_dir in os.listdir(args.logdir) if args.algo in log_dir])
     log_dir = args.logdir + '/' + args.algo + '_' + str(log_counter + 1)
     # create log dir
-    if not os.path.exists(args.logdir):
-        os.makedirs(args.logdir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
     # moving mnist 読み込み
     data = np.load(args.data_path)
