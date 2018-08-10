@@ -21,7 +21,7 @@ def argparser():
     parser.add_argument('--batch_size', default=32)
     parser.add_argument('--learning_rate', default=1e-4)
     parser.add_argument('--gamma', default=0.95)
-    parser.add_argument('--iteration', default=int(1e5))
+    parser.add_argument('--iteration', default=int(1e3))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
 
@@ -101,7 +101,7 @@ def main(args):
             agent_batch = expert_batch[:,:3,:,:,:]
 
             # test
-            #print('test: ', Policy.test_run(agent_batch))
+            print('test: ', Policy.test_run(agent_batch))
 
             # buffer
             observations = []
@@ -143,24 +143,20 @@ def main(args):
                     iteration)
 
             # discriminator
-            D_step = 2
-            D_indices = np.random.randint(
-                    low=0,
-                    high=6,
-                    size=D_step)
-            for i, idx in enumerate(D_indices):
-                # expert input
-                expert_obs = expert_batch[:, idx:idx+3, :, :, :]
-                expert_obs_next = expert_batch[:, idx+1:idx+4, :, :, :]
-                # agent input
-                agent_obs = observations[idx]
-                agent_obs_next = next_observations[idx]
-                # run discriminator train operation
+            D_step = 1
+            # 動画の全タイムステップで学習
+            for i, _ in enumerate(observations):
+                expert_obs = expert_batch[:, i:i+3, :, :, :]
+                expert_obs_next = expert_batch[:, i+1:i+4, :, :, :]
+                agent_obs = observations[i]
+                agent_obs_next = next_observations[i]
+                # train discriminator
                 _, D_loss = D.train(expert_s=expert_obs,
                         expert_s_next=expert_obs_next,
                         agent_s=agent_obs,
                         agent_s_next=agent_obs_next)
-            print('D_loss: ', D_loss)
+            if iteration % 1 == 0:
+                print('D_loss: ', D_loss)
 
             '''
             print(expert_batch[:,7:10,:,:,:].shape)
@@ -183,7 +179,6 @@ def main(args):
                 d_reward = D.get_rewards(agent_s=observations[i], agent_s_next=next_observations[i])
                 # transform d_rewards to numpy for placeholder
                 d_rewards.append(d_reward)
-            #print(d_rewards)
 
             # get generalized advantage estimator
             gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
@@ -192,29 +187,26 @@ def main(args):
             # assign parameters to old policy
             PPO.assign_policy_parameters()
 
-            # sample index
-            PPO_step = 6
-            sample_indices = np.random.randint(
-                    low=0,
-                    high=len(observations),
-                    size=PPO_step)
-
             # train PPO
-            for i, idx in enumerate(sample_indices):
+            PPO_step = 2
+            for i, _ in enumerate(observations):
                 # run ppo train operation
                 #_, PPO_loss, PPO_clip, PPO_vf, PPO_entropy = PPO.train(
                 _, total_loss, clip_loss, vf_loss, entropy_loss = PPO.train(
-                        obs=observations[idx],
-                        gaes=gaes[idx],
-                        rewards=d_rewards[idx],
-                        v_preds_next=v_preds_next[idx])
+                        obs=observations[i],
+                        gaes=gaes[i],
+                        rewards=d_rewards[i],
+                        v_preds_next=v_preds_next[i])
+                '''
                 gradients = PPO.get_grad(
-                        obs=observations[idx],
-                        gaes=gaes[idx],
-                        rewards=d_rewards[idx],
-                        v_preds_next=v_preds_next[idx])
-            print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {}'.format(
-                total_loss, clip_loss, vf_loss, entropy_loss))
+                        obs=observations[i],
+                        gaes=gaes[i],
+                        rewards=d_rewards[i],
+                        v_preds_next=v_preds_next[i])
+                '''
+            if iteration % 1 == 0:
+                print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {}'.format(
+                    total_loss, clip_loss, vf_loss, entropy_loss))
 
             # get PPO summary
             PPO_summary = PPO.get_summary(
@@ -226,7 +218,7 @@ def main(args):
             writer.add_summary(PPO_summary, iteration)
 
             # save trained model
-            if (iteration) % 1000 == 0:
+            if iteration % 1000 == 0:
                 saver.save(sess, model_dir+'/model-{}.ckpt'.format(iteration))
         writer.close()
 
