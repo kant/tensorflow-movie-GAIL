@@ -19,8 +19,10 @@ def argparser():
     parser.add_argument('--algo', default='gail')
     parser.add_argument('--leaky', default=True)
     parser.add_argument('--batch_size', default=32)
-    parser.add_argument('--learning_rate', default=1e-4)
     parser.add_argument('--gamma', default=0.95)
+    parser.add_argument('--learning_rate', default=1e-4)
+    parser.add_argument('--c_vf', default=0.2)
+    parser.add_argument('--c_entropy', default=0.01)
     parser.add_argument('--iteration', default=int(1e3))
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
@@ -69,7 +71,9 @@ def main(args):
             Old_Policy,
             obs_shape=obs_shape,
             gamma=args.gamma,
-            lr=args.learning_rate)
+            lr=args.learning_rate,
+            c_vf=args.c_vf,
+            c_entropy=args.c_entropy)
 
     # discriminator
     D = Discriminator(
@@ -101,7 +105,7 @@ def main(args):
             agent_batch = expert_batch[:,:3,:,:,:]
 
             # test
-            print('test: ', Policy.test_run(agent_batch))
+            #print('test: ', Policy.test_run(agent_batch))
 
             # buffer
             observations = []
@@ -155,11 +159,9 @@ def main(args):
                         expert_s_next=expert_obs_next,
                         agent_s=agent_obs,
                         agent_s_next=agent_obs_next)
-            if iteration % 1 == 0:
-                print('D_loss: ', D_loss)
+            print('D_loss: ', D_loss)
 
             '''
-            print(expert_batch[:,7:10,:,:,:].shape)
             # get Discriminator summary
             D_summary = D.get_summary(
                     expert_s=expert_batch[:,6:9,:,:,:],
@@ -169,7 +171,6 @@ def main(args):
                     )
             # add Discriminator summary
             writer.add_summary(D_summary, iteration)
-            print('D summaey done!!!!!!!!!!!!')
             '''
 
             # updata policy using PPO
@@ -184,14 +185,13 @@ def main(args):
             gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
             # gae = (gaes - gaes.mean()) / gaes.std()
 
-            # assign parameters to old policy
-            PPO.assign_policy_parameters()
 
             # train PPO
-            PPO_step = 2
+            PPO_step = 3
+            # assign parameters to old policy
+            PPO.assign_policy_parameters()
             for i, _ in enumerate(observations):
                 # run ppo train operation
-                #_, PPO_loss, PPO_clip, PPO_vf, PPO_entropy = PPO.train(
                 _, total_loss, clip_loss, vf_loss, entropy_loss = PPO.train(
                         obs=observations[i],
                         gaes=gaes[i],
@@ -204,9 +204,8 @@ def main(args):
                         rewards=d_rewards[i],
                         v_preds_next=v_preds_next[i])
                 '''
-            if iteration % 1 == 0:
-                print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {}'.format(
-                    total_loss, clip_loss, vf_loss, entropy_loss))
+            print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {}'.format(
+                total_loss, clip_loss, vf_loss, entropy_loss))
 
             # get PPO summary
             PPO_summary = PPO.get_summary(
@@ -218,7 +217,7 @@ def main(args):
             writer.add_summary(PPO_summary, iteration)
 
             # save trained model
-            if iteration % 1000 == 0:
+            if iteration % 100 == 0:
                 saver.save(sess, model_dir+'/model-{}.ckpt'.format(iteration))
         writer.close()
 

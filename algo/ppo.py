@@ -35,16 +35,18 @@ class PPOTrain:
             self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None,1], name='v_preds_next')
             self.gaes = tf.placeholder(dtype=tf.float32, shape=[None,1], name='gaes')
 
-        # get distribution probs: shape(batch_size, 4094)
-        act_probs = self.Policy.act_probs
-        act_probs_old = self.Old_Policy.act_probs
+        # get distribution probs
+        probs = self.Policy.probs_op
+        probs_old = self.Old_Policy.probs_op
+        # get value
+        v_preds = self.Policy.v_preds_op
 
         with tf.variable_scope('loss'):
             # 更新後の方策と更新前の方策のKL距離の制約
-            # ratio = tf.div(act_probs, act_probs_old)
+            # ratio = tf.div(probs, probs_old)
             # 収益期待値->最大化
-            ratios = tf.exp(tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0)) \
-                    - tf.log(tf.clip_by_value(act_probs_old, 1e-10, 1.0)))
+            ratios = tf.exp(tf.log(tf.clip_by_value(probs, 1e-10, 1.0)) \
+                    - tf.log(tf.clip_by_value(probs_old, 1e-10, 1.0)))
             # clipping ratios
             clipped_ratios = tf.clip_by_value(
                     ratios,
@@ -52,22 +54,21 @@ class PPOTrain:
                     clip_value_max=1 + clip_value)
             # clipping前とclipping後のlossで小さい方を使う
             loss_clip = tf.minimum(
-                    tf.reduce_sum(tf.multiply(self.gaes, ratios)),
-                    tf.reduce_sum(tf.multiply(self.gaes, clipped_ratios)))
+                    tf.reduce_mean(tf.multiply(self.gaes, ratios)),
+                    tf.reduce_mean(tf.multiply(self.gaes, clipped_ratios)))
             self.loss_clip = tf.reduce_mean(loss_clip)
             # add clipping loss to summary
             tf.summary.scalar('loss_clip', self.loss_clip)
 
             # 状態価値の分散を大きくしないための制約項->最小化
-            v_preds = self.Policy.v_preds
             loss_vf = tf.squared_difference(self.rewards + self.gamma * self.v_preds_next, v_preds)
             self.loss_vf = c_vf * tf.reduce_mean(loss_vf)
             tf.summary.scalar('value_difference', self.loss_vf)
 
             # 探索を促すためのentropy制約項->最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = - tf.reduce_mean(tf.reduce_sum(act_probs \
-                    * tf.log(tf.clip_by_value(act_probs, 1e-10, 1.0))))
+            entropy = - tf.reduce_mean(tf.reduce_mean(probs \
+                    * tf.log(tf.clip_by_value(probs, 1e-10, 1.0))))
             self.entropy = c_entropy * entropy
             tf.summary.scalar('entropy', self.entropy)
 

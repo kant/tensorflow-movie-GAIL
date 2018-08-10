@@ -161,44 +161,44 @@ class Policy_dcgan:
 
                         # 32x32x64 -> 64x64x1
                         with tf.variable_scope('dec_5'):
-                            # inference action mean
-                            mean = tf.layers.conv2d_transpose(
+                            # inference action mu
+                            mu = tf.layers.conv2d_transpose(
                                     x,
                                     filters=1,
                                     kernel_size=(5,5),
                                     strides=2,
                                     padding='same',
                                     activation=None,
-                                    name='deconv_mean')
-                            mean = tf.layers.flatten(mean, name='mu')
+                                    name='deconv_mu')
+                            mu = tf.layers.flatten(mu, name='mu')
 
-                            # inference action std
-                            std = tf.layers.conv2d_transpose(
+                            # inference action sigma
+                            sigma = tf.layers.conv2d_transpose(
                                     x,
                                     filters=1,
                                     kernel_size=(5,5),
                                     strides=2,
                                     padding='same',
                                     activation=None,
-                                    name='deconv_std')
-                            std = tf.clip_by_value(
-                                    tf.nn.softplus(tf.layers.flatten(std)),
+                                    name='deconv_sigma')
+                            sigma = tf.clip_by_value(
+                                    tf.nn.softplus(tf.layers.flatten(sigma)),
                                     1e-10,
                                     1.0,
-                                    name='std')
+                                    name='sigma')
 
                             # sample operation
-                            sample = mean + std * tf.random_normal([tf.shape(mean)[0], tf.shape(mean)[1]])
+                            samples = mu + sigma * tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
 
                             # calclate prob density
-                            prob = tf.exp(- 0.5 * (tf.square((sample - mean) / std))) \
-                                    / (tf.sqrt(2 * np.pi) * std)
+                            probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) \
+                                    / (tf.sqrt(2 * np.pi) * sigma)
 
-                            self.sample_act_op = sample
-                            self.act_probs = prob
+                            self.sample_op = samples
+                            self.probs_op = probs
 
                             # test operation
-                            self.test_op = prob
+                            self.test_op = probs
 
             # value network
             with tf.variable_scope('value_net'):
@@ -239,8 +239,7 @@ class Policy_dcgan:
                                 x,
                                 filters=256,
                                 kernel_size=(3,5,5),
-                                strides=(1,2,2),
-                                padding='same',
+                                strides=(1,2,2), padding='same',
                                 activation=None,
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
@@ -275,7 +274,7 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        self.v_preds = tf.reshape(x, shape=[-1,1], name='v_preds')
+                        self.v_preds_op = tf.reshape(x, shape=[-1,1], name='v_preds')
 
             # get network scope name
             self.scope = tf.get_variable_scope().name
@@ -287,7 +286,7 @@ class Policy_dcgan:
         obs: stacked state image
         '''
         return tf.get_default_session().run(
-                [self.sample_act_op, self.v_preds],
+                [self.sample_op, self.v_preds_op],
                 feed_dict={self.obs: obs})
 
     def get_variables(self):
