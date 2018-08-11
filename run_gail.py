@@ -14,16 +14,18 @@ from utils import generator
 def argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_path', help='path to data', default='../../dataset/mnist_test_seq.npy')
-    parser.add_argument('--logdir', help='log directory', default='log/train')
+    parser.add_argument('--logdir', help='log directory', default='log')
     parser.add_argument('--savedir', help='save directory', default='trained_models')
     parser.add_argument('--algo', default='gail')
-    parser.add_argument('--leaky', default=True)
+    parser.add_argument('--iteration', default=int(1e3), type=int)
     parser.add_argument('--batch_size', default=32, type=int)
+    parser.add_argument('--D_step', default=2, type=int)
+    parser.add_argument('--G_step', default=6, type=int)
     parser.add_argument('--gamma', default=0.95, type=float)
     parser.add_argument('--learning_rate', default=1e-4, type=float)
     parser.add_argument('--c_vf', default=0.2, type=float)
     parser.add_argument('--c_entropy', default=0.01, type=float)
-    parser.add_argument('--iteration', default=int(1e3), type=int)
+    parser.add_argument('--leaky', default=True)
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
 
@@ -34,17 +36,17 @@ def main(args):
     if not os.path.exists(args.savedir):
         os.makedirs(args.savedir)
 
+    # create trained model dir
     # ckpt counter
     ckpt_counter = len([ckpt_dir for ckpt_dir in os.listdir(args.savedir) if args.algo in ckpt_dir])
-    model_dir = args.savedir + '/' + args.algo + '_' + str(ckpt_counter + 1)
-    # create trained model dir
+    model_dir = os.path.join(args.savedir, args.algo + '_' + str(ckpt_counter + 1))
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
+    # create log dir
     # log counter
     log_counter = len([log_dir for log_dir in os.listdir(args.logdir) if args.algo in log_dir])
-    log_dir = args.logdir + '/' + args.algo + '_' + str(log_counter + 1)
-    # create log dir
+    log_dir = os.path.join(args.logdir, args.algo + '_' + str(log_counter + 1))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
@@ -127,11 +129,6 @@ def main(args):
                 agent_batch_next = np.concatenate([agent_batch[:,1:3,:,:,:], act], axis=1)
                 next_observations.append(agent_batch_next)
 
-
-                # inference reward by discriminator
-                reward = D.get_rewards(agent_s=agent_batch, agent_s_next=agent_batch_next)
-                rewards.append(reward)
-
                 run_policy_steps += 1
                 if run_policy_steps >= 7:
                     v_preds_next = v_preds[1:] + [np.zeros(v_preds[0].shape)]
@@ -140,14 +137,8 @@ def main(args):
                     # updata observations by old observations
                     agent_batch = agent_batch_next
 
-            writer.add_summary(
-                    tf.Summary(value=[tf.Summary.Value(
-                        tag='episode_reward',
-                        simple_value=sum(rewards[-1]))]),
-                    iteration)
-
             # discriminator
-            D_step = 1
+            D_step = args.D_step
             # 動画の全タイムステップで学習
             for i, _ in enumerate(observations):
                 expert_obs = expert_batch[:, i:i+3, :, :, :]
@@ -180,14 +171,22 @@ def main(args):
                 d_reward = D.get_rewards(agent_s=observations[i], agent_s_next=next_observations[i])
                 # transform d_rewards to numpy for placeholder
                 d_rewards.append(d_reward)
+            print('D_rewards: ', sum(d_rewards[0]))
+
+            writer.add_summary(
+                    tf.Summary(value=[tf.Summary.Value(
+                        tag='episode_reward',
+                        simple_value=sum(d_rewards[0]))]),
+                    iteration)
 
             # get generalized advantage estimator
-            gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
+            #gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
+            gaes = [r_t + PPO.gamma * v_next - v for r_t, v_next, v in zip(d_rewards, v_preds_next, v_preds)]
             # gae = (gaes - gaes.mean()) / gaes.std()
 
 
             # train PPO
-            PPO_step = 3
+            PPO_step = args.G_step
             # assign parameters to old policy
             PPO.assign_policy_parameters()
             for i, _ in enumerate(observations):
@@ -217,7 +216,7 @@ def main(args):
             writer.add_summary(PPO_summary, iteration)
 
             # save trained model
-            if iteration % 100 == 0:
+            if iteration % 500 == 0:
                 saver.save(sess, model_dir+'/model-{}.ckpt'.format(iteration))
         writer.close()
 

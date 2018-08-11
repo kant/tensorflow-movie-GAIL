@@ -66,7 +66,6 @@ class Discriminator:
         input: expertかactionのstate-action
         discriminatorのbuild関数
         '''
-
         with tf.variable_scope('block_1'):
             # 6x64x64x1 -> 6x16x16x64
             x = tf.layers.conv3d(
@@ -81,7 +80,6 @@ class Discriminator:
                 x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
             else:
                 x = tf.nn.relu(x, name='nonlinear')
-
         with tf.variable_scope('block_2'):
             # 6x16x16x64 -> 6x8x8x128
             x = tf.layers.conv3d(
@@ -97,7 +95,6 @@ class Discriminator:
                 x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
             else:
                 x = tf.nn.relu(x, name='nonlinear')
-
         with tf.variable_scope('block_3'):
             # 6x8x8x128 -> 6x4x4x256
             x = tf.layers.conv3d(
@@ -113,7 +110,6 @@ class Discriminator:
                 x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
             else:
                 x = tf.nn.relu(x, name='nonlinear')
-
         with tf.variable_scope('block_4'):
             # 6x4x4x256 -> 6x2x2x512
             x = tf.layers.conv3d(
@@ -129,7 +125,6 @@ class Discriminator:
                 x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
             else:
                 x = tf.nn.relu(x, name='nonlinear')
-
         with tf.variable_scope('block_5'):
             # 6x2x2x512 -> 1x1x1x1
             x = tf.layers.conv3d(
@@ -144,7 +139,6 @@ class Discriminator:
             x = tf.layers.flatten(x, name='flatten')
             # sigmoid activation 0~1
             prob = tf.sigmoid(x, name='prob')
-
         return prob
 
     def train(self, expert_s, expert_s_next, agent_s, agent_s_next):
