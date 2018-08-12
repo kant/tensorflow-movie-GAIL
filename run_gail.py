@@ -25,6 +25,7 @@ def argparser():
     parser.add_argument('--learning_rate', default=1e-4, type=float)
     parser.add_argument('--c_vf', default=0.2, type=float)
     parser.add_argument('--c_entropy', default=0.01, type=float)
+    parser.add_argument('--c_l1', default=1.0, type=float)
     parser.add_argument('--leaky', default=True)
     parser.add_argument('--gpu_num', help='specify GPU number', default='0', type=str)
     return parser.parse_args()
@@ -75,7 +76,8 @@ def main(args):
             gamma=args.gamma,
             lr=args.learning_rate,
             c_vf=args.c_vf,
-            c_entropy=args.c_entropy)
+            c_entropy=args.c_entropy,
+            c_l1=args.c_l1)
 
     # discriminator
     D = Discriminator(
@@ -112,6 +114,7 @@ def main(args):
             # buffer
             observations = []
             next_observations = []
+            expert_actions = []
             rewards = []
             v_preds = []
             run_policy_steps = 0
@@ -124,9 +127,14 @@ def main(args):
                 act, v_pred = Policy.act(obs=agent_batch)
                 v_preds.append(v_pred)
 
+                # get expert actions
+                expert_act = expert_batch[:, run_policy_steps+3, :, :, :]
+                expert_act = np.reshape(expert_act, (args.batch_size, 64 * 64))
+                expert_actions.append(expert_act)
+
                 # create next_obs
-                act = np.reshape(act, (args.batch_size,1,64,64,1))
-                agent_batch_next = np.concatenate([agent_batch[:,1:3,:,:,:], act], axis=1)
+                act = np.reshape(act, (args.batch_size, 1, 64, 64, 1))
+                agent_batch_next = np.concatenate([agent_batch[:, 1:3, :, :, :], act], axis=1)
                 next_observations.append(agent_batch_next)
 
                 run_policy_steps += 1
@@ -141,6 +149,7 @@ def main(args):
             D_step = args.D_step
             # 動画の全タイムステップで学習
             for i, _ in enumerate(observations):
+                # get observations of expert and policy
                 expert_obs = expert_batch[:, i:i+3, :, :, :]
                 expert_obs_next = expert_batch[:, i+1:i+4, :, :, :]
                 agent_obs = observations[i]
@@ -150,6 +159,7 @@ def main(args):
                         expert_s_next=expert_obs_next,
                         agent_s=agent_obs,
                         agent_s_next=agent_obs_next)
+
             print('D_loss: ', D_loss)
 
             '''
@@ -169,9 +179,8 @@ def main(args):
             d_rewards = []
             for i, _ in enumerate(observations):
                 d_reward = D.get_rewards(agent_s=observations[i], agent_s_next=next_observations[i])
-                # transform d_rewards to numpy for placeholder
                 d_rewards.append(d_reward)
-            print('D_rewards: ', sum(d_rewards[0]))
+            print('D_rewards: first {}, last {}'.format(sum(d_rewards[0]), sum(d_rewards[-1])))
 
             writer.add_summary(
                     tf.Summary(value=[tf.Summary.Value(
@@ -180,8 +189,8 @@ def main(args):
                     iteration)
 
             # get generalized advantage estimator
-            #gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
-            gaes = [r_t + PPO.gamma * v_next - v for r_t, v_next, v in zip(d_rewards, v_preds_next, v_preds)]
+            gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
+            #gaes = [r_t + PPO.gamma * v_next - v for r_t, v_next, v in zip(d_rewards, v_preds_next, v_preds)]
             # gae = (gaes - gaes.mean()) / gaes.std()
 
 
@@ -191,11 +200,12 @@ def main(args):
             PPO.assign_policy_parameters()
             for i, _ in enumerate(observations):
                 # run ppo train operation
-                _, total_loss, clip_loss, vf_loss, entropy_loss = PPO.train(
+                _, total_loss, clip_loss, vf_loss, entropy_loss, l1_loss = PPO.train(
                         obs=observations[i],
                         gaes=gaes[i],
                         rewards=d_rewards[i],
-                        v_preds_next=v_preds_next[i])
+                        v_preds_next=v_preds_next[i],
+                        expert_act=expert_actions[i])
                 '''
                 gradients = PPO.get_grad(
                         obs=observations[i],
@@ -203,15 +213,16 @@ def main(args):
                         rewards=d_rewards[i],
                         v_preds_next=v_preds_next[i])
                 '''
-            print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {}'.format(
-                total_loss, clip_loss, vf_loss, entropy_loss))
+            print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {} l1_loss: {}'.format(
+                total_loss, clip_loss, vf_loss, entropy_loss, l1_loss))
 
             # get PPO summary
             PPO_summary = PPO.get_summary(
                     obs=observations[-1],
                     gaes=gaes[-1],
                     rewards=d_rewards[-1],
-                    v_preds_next=v_preds_next[-1])
+                    v_preds_next=v_preds_next[-1],
+                    expert_act=expert_actions[-1])
             # add PPO summary
             writer.add_summary(PPO_summary, iteration)
 

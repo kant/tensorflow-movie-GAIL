@@ -13,7 +13,8 @@ class PPOTrain:
             lr=1e-4,
             clip_value=0.2,
             c_vf=0.2,
-            c_entropy=0.01):
+            c_entropy=0.01,
+            c_l1=1.0):
         # Policy network
         self.Policy = Policy
         self.Old_Policy = Old_Policy
@@ -31,22 +32,24 @@ class PPOTrain:
 
         # prepare placeholder
         with tf.variable_scope('train_inp'):
-            self.rewards = tf.placeholder(dtype=tf.float32, shape=[None,1], name='rewards')
-            self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None,1], name='v_preds_next')
-            self.gaes = tf.placeholder(dtype=tf.float32, shape=[None,1], name='gaes')
+            self.rewards = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='rewards')
+            self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='v_preds_next')
+            self.gaes = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='gaes')
+            self.expart_act = tf.placeholder(dtype=tf.float32, shape=[None, 64 * 64])
 
         # get distribution probs
         probs = self.Policy.probs_op
         probs_old = self.Old_Policy.probs_op
         # get value
         v_preds = self.Policy.v_preds_op
+        sample_act = self.Policy.sample_op
 
         with tf.variable_scope('loss'):
             # 更新後の方策と更新前の方策のKL距離の制約
             # ratio = tf.div(probs, probs_old)
             # 収益期待値->最大化
-            ratios = tf.exp(tf.log(tf.clip_by_value(probs, 1e-10, 1.0)) \
-                    - tf.log(tf.clip_by_value(probs_old, 1e-10, 1.0)))
+            ratios = tf.exp(tf.log(tf.clip_by_value(probs, 1e-10, 1.0)) - \
+                    tf.log(tf.clip_by_value(probs_old, 1e-10, 1.0)))
             # clipping ratios
             clipped_ratios = tf.clip_by_value(
                     ratios,
@@ -67,13 +70,20 @@ class PPOTrain:
 
             # 探索を促すためのentropy制約項->最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = - tf.reduce_mean(tf.reduce_mean(probs \
-                    * tf.log(tf.clip_by_value(probs, 1e-10, 1.0))))
+            entropy = - tf.reduce_mean(tf.reduce_mean(probs * \
+                    tf.log(tf.clip_by_value(probs, 1e-10, 1.0))))
             self.entropy = c_entropy * entropy
             tf.summary.scalar('entropy', self.entropy)
 
+            # L1 loss
+            loss_l1 = tf.reduce_mean(
+                    tf.reduce_sum(tf.abs(sample_act - self.expart_act), axis=1),
+                    axis=0)
+            self.loss_l1 = c_l1 * loss_l1
+            tf.summary.scalar('loss_l1', self.loss_l1)
+
             # 以下の式を最小化
-            self.loss = - self.loss_clip + self.loss_vf - self.entropy
+            self.loss = - self.loss_clip + self.loss_vf - self.entropy + self.loss_l1
             # tensorflowのoptimizerは最小最適化を行うため
             tf.summary.scalar('total', self.loss)
 
@@ -90,18 +100,19 @@ class PPOTrain:
         # 全てのsummaryを取得するoperation
         self.merged = tf.summary.merge_all()
 
-    def train(self, obs , gaes, rewards, v_preds_next):
+    def train(self, obs , gaes, rewards, v_preds_next, expert_act):
         '''train operation実行関数'''
         return tf.get_default_session().run(
-                [self.train_op, self.loss, self.loss_clip, self.loss_vf, self.entropy],
+                [self.train_op, self.loss, self.loss_clip, self.loss_vf, self.entropy, self.loss_l1],
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
-                    self.gaes: gaes})
+                    self.gaes: gaes,
+                    self.expart_act: expert_act})
 
-    def get_summary(self, obs , gaes, rewards, v_preds_next):
+    def get_summary(self, obs , gaes, rewards, v_preds_next, expert_act):
         '''summary operation実行関数'''
         return tf.get_default_session().run(
                 self.merged,
@@ -110,7 +121,8 @@ class PPOTrain:
                     self.Old_Policy.obs: obs,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
-                    self.gaes: gaes})
+                    self.gaes: gaes,
+                    self.expart_act: expert_act})
 
     def assign_policy_parameters(self):
         '''PolicyのパラメータをOld_Policyに代入'''
@@ -134,7 +146,7 @@ class PPOTrain:
             gaes[t] = gaes[t] + self.gamma * gaes[t + 1]
         return gaes
 
-    def get_grad(self, obs , gaes, rewards, v_preds_next):
+    def get_grad(self, obs , gaes, rewards, v_preds_next, expert_act):
         '''
         勾配計算関数
         obs: 状態
@@ -149,4 +161,5 @@ class PPOTrain:
                     self.Old_Policy.obs: obs,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
-                    self.gaes: gaes})
+                    self.gaes: gaes,
+                    self.expart_act: expert_act})

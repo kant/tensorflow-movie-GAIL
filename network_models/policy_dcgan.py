@@ -191,8 +191,8 @@ class Policy_dcgan:
                             samples = mu + sigma * tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
 
                             # calclate prob density
-                            probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) \
-                                    / (tf.sqrt(2 * np.pi) * sigma)
+                            probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) / \
+                            (tf.sqrt(2 * np.pi) * sigma)
 
                             self.sample_op = samples
                             self.probs_op = probs
