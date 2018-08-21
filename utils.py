@@ -17,5 +17,6 @@ def generator(data, batch_size=32):
             if len(batch) == batch_size:
                 np_batch = np.array(batch)
                 np_batch = np.reshape(batch, (batch_size, 10, 64, 64, 1))
+                np_batch = np_batch / 255
                 batch = []
                 yield np_batch

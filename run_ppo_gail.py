@@ -1,9 +1,11 @@
 import os
-import argparse
 import copy
+import json
+import argparse
+
 import numpy as np
-import tensorflow as tf
 from tqdm import tqdm
+import tensorflow as tf
 
 from network_models.policy_dcgan import Policy_dcgan
 from network_models.discriminator import Discriminator
@@ -50,6 +52,21 @@ def main(args):
     log_dir = os.path.join(args.logdir, args.algo + '_' + str(log_counter + 1))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    config = {'data': args.data_path,
+            'batch_size': args.batch_size,
+            'algo': args.algo,
+            'iteration': args.iteration,
+            'D_step': args.D_step,
+            'G_step': args.G_step,
+            'gamma': args.gamma,
+            'learning_rate': args.learning_rate,
+            'c_vf': args.c_vf,
+            'c_entropy': args.c_entropy,
+            'c_l1': args.c_l1,
+            'leaky': args.leaky}
+    with open(os.path.join(log_dir, 'config.json')) as f:
+        f.write(json.dumps(config))
 
     # moving mnist 読み込み
     data = np.load(args.data_path)
@@ -104,7 +121,6 @@ def main(args):
         for iteration in tqdm(range(1, args.iteration+1)):
             # create batch 0~1
             expert_batch = next(gen)
-            expert_batch = expert_batch / 255
             # first 3 frame
             agent_batch = expert_batch[:,:3,:,:,:]
 
