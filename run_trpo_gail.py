@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from network_models.policy_dcgan import Policy_dcgan
 from network_models.discriminator import Discriminator
-from algo.ppo import PPOTrain
+from algo.trpo import TRPOTrain
 from utils import generator
 
 
@@ -16,7 +16,7 @@ def argparser():
     parser.add_argument('--data_path', help='path to data', default='../../dataset/mnist_test_seq.npy')
     parser.add_argument('--logdir', help='log directory', default='log')
     parser.add_argument('--savedir', help='save directory', default='trained_models')
-    parser.add_argument('--algo', default='gail')
+    parser.add_argument('--algo', default='gail_trpo')
     parser.add_argument('--iteration', default=int(1e3), type=int)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--D_step', default=2, type=int)
@@ -68,8 +68,8 @@ def main(args):
             obs_shape=obs_shape,
             decode=True,
             leaky=args.leaky)
-    # ppo学習インスタンス
-    PPO = PPOTrain(
+    # trpo学習インスタンス
+    TRPO = TRPOTrain(
             Policy,
             Old_Policy,
             obs_shape=obs_shape,
@@ -174,7 +174,7 @@ def main(args):
             writer.add_summary(D_summary, iteration)
             '''
 
-            # updata policy using PPO
+            # updata policy using TRPO
             # get d_rewards from discrminator
             d_rewards = []
             for i, _ in enumerate(observations):
@@ -189,25 +189,25 @@ def main(args):
                     iteration)
 
             # get generalized advantage estimator
-            gaes = PPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
-            #gaes = [r_t + PPO.gamma * v_next - v for r_t, v_next, v in zip(d_rewards, v_preds_next, v_preds)]
+            #gaes = TRPO.get_gaes(rewards=d_rewards, v_preds=v_preds, v_preds_next=v_preds_next)
+            gaes = [r_t + TRPO.gamma * v_next - v for r_t, v_next, v in zip(d_rewards, v_preds_next, v_preds)]
             # gae = (gaes - gaes.mean()) / gaes.std()
 
 
-            # train PPO
-            PPO_step = args.G_step
+            # train TRPO
+            TRPO_step = args.G_step
             # assign parameters to old policy
-            PPO.assign_policy_parameters()
+            TRPO.assign_policy_parameters()
             for i, _ in enumerate(observations):
-                # run ppo train operation
-                _, total_loss, clip_loss, vf_loss, entropy_loss, l1_loss = PPO.train(
+                # run trpo train operation
+                _, total_loss, clip_loss, vf_loss, entropy_loss, l1_loss = TRPO.train(
                         obs=observations[i],
                         gaes=gaes[i],
                         rewards=d_rewards[i],
                         v_preds_next=v_preds_next[i],
                         expert_act=expert_actions[i])
                 '''
-                gradients = PPO.get_grad(
+                gradients = TRPO.get_grad(
                         obs=observations[i],
                         gaes=gaes[i],
                         rewards=d_rewards[i],
@@ -216,15 +216,15 @@ def main(args):
             print('total_loss: {}, clip_loss: {}, vf_loss: {}, entropy_loss: {} l1_loss: {}'.format(
                 total_loss, clip_loss, vf_loss, entropy_loss, l1_loss))
 
-            # get PPO summary
-            PPO_summary = PPO.get_summary(
+            # get TRPO summary
+            TRPO_summary = TRPO.get_summary(
                     obs=observations[-1],
                     gaes=gaes[-1],
                     rewards=d_rewards[-1],
                     v_preds_next=v_preds_next[-1],
                     expert_act=expert_actions[-1])
-            # add PPO summary
-            writer.add_summary(PPO_summary, iteration)
+            # add TRPO summary
+            writer.add_summary(TRPO_summary, iteration)
 
             # save trained model
             if iteration % 500 == 0:

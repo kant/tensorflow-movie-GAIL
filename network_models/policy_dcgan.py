@@ -25,9 +25,9 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x32x32x64 -> 3x16x16x128
                     with tf.variable_scope('enc_2'):
@@ -41,9 +41,9 @@ class Policy_dcgan:
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x16x16x128 -> 3x8x8x256
                     with tf.variable_scope('enc_3'):
@@ -57,9 +57,9 @@ class Policy_dcgan:
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x8x8x256 -> 3x4x4x512
                     with tf.variable_scope('enc_4'):
@@ -73,9 +73,9 @@ class Policy_dcgan:
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x4x4x512 -> 2x2x512
                     with tf.variable_scope('enc_5'):
@@ -88,9 +88,9 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
                         self.enc_feature = tf.reshape(x, shape=[-1,2,2,512])
 
                 if decode:
@@ -107,9 +107,9 @@ class Policy_dcgan:
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                             else:
-                                x = tf.nn.relu(x, name='nonlinear')
+                                x = tf.nn.relu(x, name='activation')
 
                         # 4x4x512 -> 8x8x256
                         with tf.variable_scope('dec_2'):
@@ -123,9 +123,9 @@ class Policy_dcgan:
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                             else:
-                                x = tf.nn.relu(x, name='nonlinear')
+                                x = tf.nn.relu(x, name='activation')
 
                         # 8x8x256 -> 16x16x128
                         with tf.variable_scope('dec_3'):
@@ -139,9 +139,9 @@ class Policy_dcgan:
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                             else:
-                                x = tf.nn.relu(x, name='nonlinear')
+                                x = tf.nn.relu(x, name='activation')
 
                         # 16x16x128 -> 32x32x64
                         with tf.variable_scope('dec_4'):
@@ -155,9 +155,9 @@ class Policy_dcgan:
                                     name='deconv')
                             x = tf.layers.batch_normalization(x, name='BN')
                             if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                             else:
-                                x = tf.nn.relu(x, name='nonlinear')
+                                x = tf.nn.relu(x, name='activation')
 
                         # 32x32x64 -> 64x64x1
                         with tf.variable_scope('dec_5'):
@@ -170,7 +170,7 @@ class Policy_dcgan:
                                     padding='same',
                                     activation=None,
                                     name='deconv_mu')
-                            mu = tf.layers.flatten(mu, name='mu')
+                            mu = tf.layers.flatten(tf.nn.sigmoid(mu), name='mu')
 
                             # inference action sigma
                             sigma = tf.layers.conv2d_transpose(
@@ -213,9 +213,9 @@ class Policy_dcgan:
                                 activation=None,
                                 name='conv')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x16x16x64 -> 3x8x8x128
                     with tf.variable_scope('enc_2'):
@@ -229,9 +229,9 @@ class Policy_dcgan:
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x8x8x128 -> 3x4x4x256
                     with tf.variable_scope('enc_3'):
@@ -244,9 +244,9 @@ class Policy_dcgan:
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x4x4x256 -> 3x2x2x512
                     with tf.variable_scope('enc_4'):
@@ -260,9 +260,9 @@ class Policy_dcgan:
                                 name='conv')
                         x = tf.layers.batch_normalization(x, name='BN')
                         if self.leaky:
-                            x = tf.nn.leaky_relu(x, alpha=0.2, name='nonlinear')
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
-                            x = tf.nn.relu(x, name='nonlinear')
+                            x = tf.nn.relu(x, name='activation')
 
                     # 3x2x2x512 -> 1x1x1x1
                     with tf.variable_scope('enc_5'):
