@@ -4,11 +4,11 @@ import tensorflow as tf
 
 class Policy_dcgan:
     '''encoder decoder policy network'''
-    def __init__(self, name, obs_shape, decode=True, leaky=True):
+    def __init__(self, name, obs_shape, batch_size, decode=True, leaky=True):
 
         with tf.variable_scope(name):
             # placeholder for input state
-            self.obs = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape, name='obs')
+            self.obs = tf.placeholder(dtype=tf.float32, shape=[batch_size]+obs_shape, name='obs')
             self.leaky = leaky
 
             # policy network
@@ -91,7 +91,7 @@ class Policy_dcgan:
                             x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
                         else:
                             x = tf.nn.relu(x, name='activation')
-                        self.enc_feature = tf.reshape(x, shape=[-1,2,2,512])
+                        self.enc_feature = tf.reshape(x, shape=[batch_size,2,2,512])
 
                 if decode:
                     with tf.variable_scope('dec'):
@@ -275,7 +275,7 @@ class Policy_dcgan:
                                 padding='same',
                                 activation=None,
                                 name='conv')
-                        self.v_preds_op = tf.reshape(x, shape=[-1,1], name='v_preds')
+                        self.v_preds_op = tf.reshape(x, shape=[batch_size,1], name='v_preds')
 
             # get network scope name
             self.scope = tf.get_variable_scope().name

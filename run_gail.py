@@ -9,6 +9,7 @@ import tensorflow as tf
 
 from network_models.policy_dcgan import Policy_dcgan
 from network_models.discriminator import Discriminator
+from network_models.sn_discriminator import SNDiscriminator
 from algo.ppo import PPOTrain
 from algo.trpo import TRPOTrain
 from utils import generator
@@ -40,7 +41,8 @@ def argparser():
     parser.add_argument('--c_entropy', type=float, default=0.01)
     parser.add_argument('--c_l1', type=float, default=1.0)
     parser.add_argument('--leaky', type=bool, default=True)
-    parser.add_argument('--frequency', type=int, default=100)
+    parser.add_argument('--sn', type=bool, default='')
+    parser.add_argument('--frequency', type=int, default=50)
     parser.add_argument('--gpu_num', type=str, help='specify GPU number',
             default='0')
     return parser.parse_args()
@@ -79,7 +81,8 @@ def main(args):
             'c_entropy': args.c_entropy,
             'c_l1': args.c_l1,
             'vf_clip': args.vf_clip,
-            'leaky': args.leaky}
+            'leaky': args.leaky,
+            'spectral normalization': args.sn}
     with open(os.path.join(log_dir, 'config.json'), 'w') as f:
         f.write(json.dumps(config, indent=4))
 
@@ -94,14 +97,17 @@ def main(args):
     Policy = Policy_dcgan(
             'policy',
             obs_shape=obs_shape,
+            batch_size=args.batch_size,
             decode=True,
             leaky=args.leaky)
     Old_Policy = Policy_dcgan(
             'old_policy',
             obs_shape=obs_shape,
+            batch_size=args.batch_size,
             decode=True,
             leaky=args.leaky)
     if args.algo == 'ppo':
+        print('Building PPO Agent')
         Agent = PPOTrain(
                 Policy,
                 Old_Policy,
@@ -113,6 +119,7 @@ def main(args):
                 obs_size=args.obs_size,
                 vf_clip=args.vf_clip)
     elif args.algo == 'trpo':
+        print('Building TRPO Agent')
         Agent = TRPOTrain(
                 Policy,
                 Old_Policy,
@@ -127,8 +134,14 @@ def main(args):
         raise ValueError('invalid algo name')
 
     # discriminator
-    D = Discriminator(
-            obs_shape=obs_shape,
+    if args.sn:
+        print('Building SNGAN Descriminator')
+        D = SNDiscriminator(obs_shape=obs_shape,
+            batch_size=args.batch_size)
+    else:
+        print('Building DCGAN Descriminator')
+        D = Discriminator(obs_shape=obs_shape,
+            batch_size=args.batch_size,
             leaky=args.leaky)
 
     # tensorflow saver
