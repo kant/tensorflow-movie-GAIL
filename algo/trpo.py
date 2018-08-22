@@ -10,16 +10,16 @@ class TRPOTrain:
             Old_Policy,
             obs_shape,
             gamma=0.95,
-            lr=1e-4,
             clip_value=0.2,
             c_vf=0.2,
             c_entropy=0.01,
-            c_l1=1.0):
+            c_l1=1.0,
+            obs_size=64,
+            vf_clip=''):
         # Policy network
         self.Policy = Policy
         self.Old_Policy = Old_Policy
         self.gamma = gamma
-        self.lr = lr
         # get trainable parameters
         pi_trainable = self.Policy.get_trainable_variables()
         old_pi_trainable = self.Old_Policy.get_trainable_variables()
@@ -32,10 +32,16 @@ class TRPOTrain:
 
         # prepare placeholder
         with tf.variable_scope('train_inp'):
-            self.rewards = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='rewards')
-            self.v_preds_next = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='v_preds_next')
-            self.gaes = tf.placeholder(dtype=tf.float32, shape=[None, 1], name='gaes')
-            self.expart_act = tf.placeholder(dtype=tf.float32, shape=[None, 64 * 64])
+            self.lr = tf.placeholder(dtype=tf.float32,
+                    name='learning_rate')
+            self.rewards = tf.placeholder(dtype=tf.float32,
+                    shape=[None, 1], name='rewards')
+            self.v_preds_next = tf.placeholder(dtype=tf.float32,
+                    shape=[None, 1], name='v_preds_next')
+            self.gaes = tf.placeholder(dtype=tf.float32,
+                    shape=[None, 1], name='gaes')
+            self.expart_act = tf.placeholder(dtype=tf.float32,
+                    shape=[None, obs_size * obs_size])
 
         # get distribution probs
         probs = self.Policy.probs_op
@@ -48,7 +54,8 @@ class TRPOTrain:
             # 更新後の方策と更新前の方策のKL距離の制約
             # ratio = tf.div(probs, probs_old)
             # 収益期待値->最大化
-            ratios = tf.exp(tf.log(tf.clip_by_value(probs, 1e-10, 1.0)) - \
+            ratios = tf.exp(
+                    tf.log(tf.clip_by_value(probs, 1e-10, 1.0)) - \
                     tf.log(tf.clip_by_value(probs_old, 1e-10, 1.0)))
             loss_clip = tf.reduce_mean(tf.multiply(self.gaes, ratios))
             self.loss_clip = tf.reduce_mean(loss_clip)
@@ -56,26 +63,32 @@ class TRPOTrain:
             tf.summary.scalar('loss_clip', self.loss_clip)
 
             # 状態価値の分散を大きくしないための制約項->最小化
-            loss_vf = tf.squared_difference(self.rewards + self.gamma * self.v_preds_next, v_preds)
-            self.loss_vf = c_vf * tf.reduce_mean(loss_vf)
+            loss_vf = tf.squared_difference(self.rewards + \
+                    self.gamma * self.v_preds_next, v_preds)
+            self.loss_vf = tf.reduce_mean(loss_vf)
+            if vf_clip:
+                self.loss_vf = tf.clip_by_value(self.loss_vf, 1e-10, 1000)
             tf.summary.scalar('value_difference', self.loss_vf)
 
             # 探索を促すためのentropy制約項->最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = - tf.reduce_mean(tf.reduce_mean(probs * \
-                    tf.log(tf.clip_by_value(probs, 1e-10, 1.0))))
-            self.entropy = c_entropy * entropy
+            entropy = - tf.reduce_mean(probs * \
+                    tf.log(tf.clip_by_value(probs, 1e-10, 1.0)), axis=1)
+            self.entropy = tf.reduce_mean(entropy, axis=0)
             tf.summary.scalar('entropy', self.entropy)
 
             # L1 loss
-            loss_l1 = tf.reduce_mean(
-                    tf.reduce_sum(tf.abs(sample_act - self.expart_act), axis=1),
-                    axis=0)
-            self.loss_l1 = c_l1 * loss_l1
+            loss_l1 = tf.reduce_sum(
+                    tf.abs(sample_act - self.expart_act),
+                    axis=1)
+            loss_l1 = tf.reduce_mean(loss_l1)
+            self.loss_l1 = loss_l1
             tf.summary.scalar('loss_l1', self.loss_l1)
 
             # 以下の式を最小化
-            self.loss = - self.loss_clip + self.loss_vf - self.entropy + self.loss_l1
+            loss = self.loss_clip - c_vf * self.loss_vf + \
+                    c_entropy * self.entropy - c_l1 * self.loss_l1
+            self.loss = -loss
             # tensorflowのoptimizerは最小最適化を行うため
             tf.summary.scalar('total', self.loss)
 
@@ -92,25 +105,27 @@ class TRPOTrain:
         # 全てのsummaryを取得するoperation
         self.merged = tf.summary.merge_all()
 
-    def train(self, obs , gaes, rewards, v_preds_next, expert_act):
+    def train(self, obs , gaes, rewards, v_preds_next, expert_act, lr):
         '''train operation実行関数'''
         return tf.get_default_session().run(
                 [self.train_op, self.loss, self.loss_clip, self.loss_vf, self.entropy, self.loss_l1],
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
+                    self.lr: lr,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
                     self.gaes: gaes,
                     self.expart_act: expert_act})
 
-    def get_summary(self, obs , gaes, rewards, v_preds_next, expert_act):
+    def get_summary(self, obs , gaes, rewards, v_preds_next, expert_act, lr):
         '''summary operation実行関数'''
         return tf.get_default_session().run(
                 self.merged,
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
+                    self.lr: lr,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
                     self.gaes: gaes,
@@ -138,7 +153,7 @@ class TRPOTrain:
             gaes[t] = gaes[t] + self.gamma * gaes[t + 1]
         return gaes
 
-    def get_grad(self, obs , gaes, rewards, v_preds_next, expert_act):
+    def get_grad(self, obs , gaes, rewards, v_preds_next, expert_act, lr):
         '''
         勾配計算関数
         obs: 状態
@@ -151,6 +166,7 @@ class TRPOTrain:
                 feed_dict={
                     self.Policy.obs: obs,
                     self.Old_Policy.obs: obs,
+                    self.lr: lr,
                     self.rewards: rewards,
                     self.v_preds_next: v_preds_next,
                     self.gaes: gaes,

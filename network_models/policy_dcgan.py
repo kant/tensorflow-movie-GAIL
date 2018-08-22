@@ -188,7 +188,8 @@ class Policy_dcgan:
                                     name='sigma')
 
                             # sample operation
-                            samples = mu + sigma * tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
+                            samples = mu + sigma * \
+                                    tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
 
                             # calclate prob density
                             probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) / \
@@ -198,7 +199,7 @@ class Policy_dcgan:
                             self.probs_op = probs
 
                             # test operation
-                            self.test_op = probs
+                            self.test_op = tf.shape(self.sample_op)
 
             # value network
             with tf.variable_scope('value_net'):

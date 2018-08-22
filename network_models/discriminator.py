@@ -3,7 +3,7 @@ import tensorflow as tf
 
 class Discriminator:
     '''Generative Advesarial Imitation Learning'''
-    def __init__(self, obs_shape, lr, leaky=True):
+    def __init__(self, obs_shape, leaky=True):
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
@@ -12,6 +12,7 @@ class Discriminator:
 
         with tf.variable_scope('discriminator'):
             # get vaiable scope name
+            self.lr = tf.placeholder(dtype=tf.float32, name='learningrate')
             self.scope = tf.get_variable_scope().name
 
             # expert state placeholder
@@ -47,12 +48,13 @@ class Discriminator:
 
                 # inverse sign because tensorflow minimize loss
                 loss = loss_expert + loss_agent
-                self.loss = -loss
+                self.loss = - loss
                 # add discriminator loss to summary
                 tf.summary.scalar('discriminator', self.loss)
 
             # optimize operation
-            optimizer = tf.train.AdamOptimizer(learning_rate=lr, epsilon=1e-5)
+            #optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
             self.train_op = optimizer.minimize(self.loss)
 
             # 全てのsummaryを取得するoperation
@@ -141,7 +143,7 @@ class Discriminator:
             prob = tf.sigmoid(x, name='prob')
         return prob
 
-    def train(self, expert_s, expert_s_next, agent_s, agent_s_next):
+    def train(self, expert_s, expert_s_next, agent_s, agent_s_next, lr):
         '''
         train discriminator function
         expert_s, expert_s_next: state-action of expert
@@ -150,16 +152,18 @@ class Discriminator:
         return tf.get_default_session().run(
                 [self.train_op, self.loss],
                 feed_dict={
+                    self.lr: lr,
                     self.expert_s: expert_s,
                     self.expert_s_next: expert_s_next,
                     self.agent_s: agent_s,
                     self.agent_s_next: agent_s_next})
 
-    def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next):
+    def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next, lr):
         '''summary operation実行関数'''
         return tf.get_default_session().run(
                 self.merged,
                 feed_dict={
+                    self.lr: lr,
                     self.expert_s: expert_s,
                     self.expert_s_next: expert_s_next,
                     self.agent_s: agent_s,
