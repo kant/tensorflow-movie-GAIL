@@ -2,8 +2,9 @@ import numpy as np
 import tensorflow as tf
 
 
-class Policy_dcgan:
-    '''encoder decoder policy network'''
+class DCGANPolicy:
+    '''DCGAN Encoder Decoder including 3D conv'''
+
     def __init__(self, name, obs_shape, batch_size, decode=True, leaky=True):
 
         with tf.variable_scope(name):
@@ -93,113 +94,114 @@ class Policy_dcgan:
                             x = tf.nn.relu(x, name='activation')
                         self.enc_feature = tf.reshape(x, shape=[batch_size,2,2,512])
 
-                if decode:
-                    with tf.variable_scope('dec'):
-                        # 2x2x512 -> 4x4x512
-                        with tf.variable_scope('dec_1'):
-                            x = tf.layers.conv2d_transpose(
-                                    self.enc_feature,
-                                    filters=512,
-                                    kernel_size=(5,5),
-                                    strides=2,
-                                    padding='same',
-                                    activation=None,
-                                    name='deconv')
-                            x = tf.layers.batch_normalization(x, name='BN')
-                            if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
-                            else:
-                                x = tf.nn.relu(x, name='activation')
+            if decode:
+                with tf.variable_scope('dec'):
+                    # 2x2x512 -> 4x4x512
+                    with tf.variable_scope('dec_1'):
+                        x = tf.layers.conv2d_transpose(
+                                self.enc_feature,
+                                filters=512,
+                                kernel_size=(5,5),
+                                strides=2,
+                                padding='same',
+                                activation=None,
+                                name='deconv')
+                        x = tf.layers.batch_normalization(x, name='BN')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
+                        else:
+                            x = tf.nn.relu(x, name='activation')
 
-                        # 4x4x512 -> 8x8x256
-                        with tf.variable_scope('dec_2'):
-                            x = tf.layers.conv2d_transpose(
-                                    x,
-                                    filters=256,
-                                    kernel_size=(5,5),
-                                    strides=2,
-                                    padding='same',
-                                    activation=None,
-                                    name='deconv')
-                            x = tf.layers.batch_normalization(x, name='BN')
-                            if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
-                            else:
-                                x = tf.nn.relu(x, name='activation')
+                    # 4x4x512 -> 8x8x256
+                    with tf.variable_scope('dec_2'):
+                        x = tf.layers.conv2d_transpose(
+                                x,
+                                filters=256,
+                                kernel_size=(5,5),
+                                strides=2,
+                                padding='same',
+                                activation=None,
+                                name='deconv')
+                        x = tf.layers.batch_normalization(x, name='BN')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
+                        else:
+                            x = tf.nn.relu(x, name='activation')
 
-                        # 8x8x256 -> 16x16x128
-                        with tf.variable_scope('dec_3'):
-                            x = tf.layers.conv2d_transpose(
-                                    x,
-                                    filters=128,
-                                    kernel_size=(5,5),
-                                    strides=2,
-                                    padding='same',
-                                    activation=None,
-                                    name='deconv')
-                            x = tf.layers.batch_normalization(x, name='BN')
-                            if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
-                            else:
-                                x = tf.nn.relu(x, name='activation')
+                    # 8x8x256 -> 16x16x128
+                    with tf.variable_scope('dec_3'):
+                        x = tf.layers.conv2d_transpose(
+                                x,
+                                filters=128,
+                                kernel_size=(5,5),
+                                strides=2,
+                                padding='same',
+                                activation=None,
+                                name='deconv')
+                        x = tf.layers.batch_normalization(x, name='BN')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
+                        else:
+                            x = tf.nn.relu(x, name='activation')
 
-                        # 16x16x128 -> 32x32x64
-                        with tf.variable_scope('dec_4'):
-                            x = tf.layers.conv2d_transpose(
-                                    x,
-                                    filters=64,
-                                    kernel_size=(5,5),
-                                    strides=2,
-                                    padding='same',
-                                    activation=None,
-                                    name='deconv')
-                            x = tf.layers.batch_normalization(x, name='BN')
-                            if self.leaky:
-                                x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
-                            else:
-                                x = tf.nn.relu(x, name='activation')
+                    # 16x16x128 -> 32x32x64
+                    with tf.variable_scope('dec_4'):
+                        x = tf.layers.conv2d_transpose(
+                                x,
+                                filters=64,
+                                kernel_size=(5,5),
+                                strides=2,
+                                padding='same',
+                                activation=None,
+                                name='deconv')
+                        x = tf.layers.batch_normalization(x, name='BN')
+                        if self.leaky:
+                            x = tf.nn.leaky_relu(x, alpha=0.2, name='activation')
+                        else:
+                            x = tf.nn.relu(x, name='activation')
 
-                        # 32x32x64 -> 64x64x1
-                        with tf.variable_scope('dec_5'):
-                            # inference action mu
-                            mu = tf.layers.conv2d_transpose(
-                                    x,
-                                    filters=1,
-                                    kernel_size=(5,5),
-                                    strides=2,
-                                    padding='same',
-                                    activation=None,
-                                    name='deconv_mu')
-                            mu = tf.layers.flatten(tf.nn.sigmoid(mu), name='mu')
+                    # 32x32x64 -> 64x64x1
+                    with tf.variable_scope('dec_5'):
+                        # inference action mu
+                        mu = tf.layers.conv2d_transpose(
+                                x,
+                                filters=1,
+                                kernel_size=(5,5),
+                                strides=2,
+                                padding='same',
+                                activation=None,
+                                name='deconv_mu')
+                        self.mu = tf.layers.flatten(tf.nn.sigmoid(mu), name='mu')
 
-                            # inference action sigma
-                            sigma = tf.layers.conv2d_transpose(
-                                    x,
-                                    filters=1,
-                                    kernel_size=(5,5),
-                                    strides=2,
-                                    padding='same',
-                                    activation=None,
-                                    name='deconv_sigma')
-                            sigma = tf.clip_by_value(
-                                    tf.nn.softplus(tf.layers.flatten(sigma)),
-                                    1e-10,
-                                    1.0,
-                                    name='sigma')
+                        # inference action sigma
+                        sigma = tf.layers.conv2d_transpose(
+                                x,
+                                filters=1,
+                                kernel_size=(5,5),
+                                strides=2,
+                                padding='same',
+                                activation=None,
+                                name='deconv_sigma')
+                        self.sigma = tf.clip_by_value(
+                                tf.nn.softplus(tf.layers.flatten(sigma)),
+                                1e-10,
+                                1.0,
+                                name='sigma')
 
-                            # sample operation
-                            samples = mu + sigma * \
-                                    tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
+                    # sample operation
+                    samples = self.mu + self.sigma * \
+                            tf.random_normal([tf.shape(self.mu)[0], tf.shape(self.mu)[1]])
 
-                            # calclate prob density
-                            probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) / \
-                            (tf.sqrt(2 * np.pi) * sigma)
+                    # calclate prob density
+                    probs = tf.exp(- 0.5 * \
+                            (tf.square((samples - self.mu) / self.sigma))) / \
+                            (tf.sqrt(2 * np.pi) * self.sigma)
 
-                            self.sample_op = samples
-                            self.probs_op = probs
+                    self.sample_op = samples
+                    self.probs_op = probs
 
-                            # test operation
-                            self.test_op = tf.shape(self.sample_op)
+                    # test operation
+                    self.test_op = tf.shape(self.sample_op)
 
             # value network
             with tf.variable_scope('value_net'):
@@ -290,6 +292,11 @@ class Policy_dcgan:
                 [self.sample_op, self.v_preds_op],
                 feed_dict={self.obs: obs})
 
+    def get_mu_sigma(self, obs):
+        return tf.get_default_session().run(
+                [self.mu, self.sigma],
+                feed_dict={self.obs: obs})
+
     def get_variables(self):
         '''get param function'''
         return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, self.scope)
@@ -299,7 +306,7 @@ class Policy_dcgan:
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
 
     def test_run(self, obs):
-        '''train operation実行関数'''
+        '''train operation function'''
         return tf.get_default_session().run(
                 self.test_op,
                 feed_dict={self.obs: obs})

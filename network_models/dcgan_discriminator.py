@@ -1,8 +1,9 @@
 import tensorflow as tf
 
 
-class Discriminator:
-    '''Generative Advesarial Imitation Learning'''
+class DCGANDiscriminator:
+    '''DCGAN Discriminator including 3D conv'''
+
     def __init__(self, obs_shape, batch_size, leaky=True):
         """
         visual forecasting by imitation learning class
@@ -57,17 +58,14 @@ class Discriminator:
             optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
             self.train_op = optimizer.minimize(self.loss)
 
-            # 全てのsummaryを取得するoperation
+            # summary operation
             self.merged = tf.summary.merge_all()
 
             # fix discriminator and get d_reward
             self.rewards = tf.log(tf.clip_by_value(agent_prob, 1e-10, 1))
 
     def construct_network(self, input):
-        '''
-        input: expertかactionのstate-action
-        discriminatorのbuild関数
-        '''
+        '''Build network function'''
         with tf.variable_scope('block_1'):
             # 6x64x64x1 -> 6x16x16x64
             x = tf.layers.conv3d(
@@ -159,7 +157,7 @@ class Discriminator:
                     self.agent_s_next: agent_s_next})
 
     def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next, lr):
-        '''summary operation実行関数'''
+        '''summary operation function'''
         return tf.get_default_session().run(
                 self.merged,
                 feed_dict={

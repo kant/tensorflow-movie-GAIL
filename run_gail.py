@@ -7,9 +7,10 @@ import numpy as np
 from tqdm import tqdm
 import tensorflow as tf
 
-from network_models.policy_dcgan import Policy_dcgan
-from network_models.discriminator import Discriminator
-from network_models.sn_discriminator import SNDiscriminator
+from network_models.dcgan_policy import DCGANPolicy
+from network_models.sngan_policy import SNGANPolicy
+from network_models.dcgan_discriminator import DCGANDiscriminator
+from network_models.sngan_discriminator import SNDiscriminator
 from algo.ppo import PPOTrain
 from algo.trpo import TRPOTrain
 from utils import generator
@@ -42,7 +43,7 @@ def argparser():
     parser.add_argument('--c_l1', type=float, default=1.0)
     parser.add_argument('--leaky', type=bool, default=True)
     parser.add_argument('--sn', type=bool, default='')
-    parser.add_argument('--frequency', type=int, default=50)
+    parser.add_argument('--frequency', type=int, default=100)
     parser.add_argument('--gpu_num', type=str, help='specify GPU number',
             default='0')
     return parser.parse_args()
@@ -71,6 +72,7 @@ def main(args):
     config = {'data': args.data_path,
             'algo': args.algo,
             'batch_size': args.batch_size,
+            'obs_shape': args.obs_size,
             'iteration': args.iteration,
             'D_step': args.D_step,
             'G_step': args.G_step,
@@ -93,19 +95,41 @@ def main(args):
     gen = generator(data,
             batch_size=args.batch_size, img_size=args.obs_size)
 
-    # policy net
-    Policy = Policy_dcgan(
-            'policy',
-            obs_shape=obs_shape,
+    # Build networks
+    if args.sn:
+        print('Building SNGAN Descriminator')
+        Policy = SNGANPolicy(
+                'policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True)
+        Old_Policy = SNGANPolicy(
+                'old_policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True)
+        D = SNDiscriminator(obs_shape=obs_shape,
+            batch_size=args.batch_size)
+    else:
+        print('Building DCGAN Networks')
+        # policy net
+        Policy = DCGANPolicy(
+                'policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True,
+                leaky=args.leaky)
+        Old_Policy = DCGANPolicy(
+                'old_policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True,
+                leaky=args.leaky)
+        D = DCGANDiscriminator(obs_shape=obs_shape,
             batch_size=args.batch_size,
-            decode=True,
             leaky=args.leaky)
-    Old_Policy = Policy_dcgan(
-            'old_policy',
-            obs_shape=obs_shape,
-            batch_size=args.batch_size,
-            decode=True,
-            leaky=args.leaky)
+
+    # Build imitation learning agent
     if args.algo == 'ppo':
         print('Building PPO Agent')
         Agent = PPOTrain(
@@ -133,19 +157,7 @@ def main(args):
     else:
         raise ValueError('invalid algo name')
 
-    # discriminator
-    if args.sn:
-        print('Building SNGAN Descriminator')
-        D = SNDiscriminator(obs_shape=obs_shape,
-            batch_size=args.batch_size)
-    else:
-        print('Building DCGAN Descriminator')
-        D = Discriminator(obs_shape=obs_shape,
-            batch_size=args.batch_size,
-            leaky=args.leaky)
 
-    # tensorflow saver
-    saver = tf.train.Saver()
     # session config
     config = tf.ConfigProto(
             gpu_options=tf.GPUOptions(
@@ -154,6 +166,8 @@ def main(args):
                 ))
     # start session
     with tf.Session(config=config) as sess:
+        # tensorflow saver
+        saver = tf.train.Saver()
         # summary writer
         writer = tf.summary.FileWriter(log_dir, sess.graph)
         # initialize Session

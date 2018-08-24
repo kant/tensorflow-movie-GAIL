@@ -1,9 +1,10 @@
 import tensorflow as tf
-from network_models.layers import conv, fully_connected, spectral_norm, instanceNorm, leaky_relu
+from network_models.layers import *
 
 
 class SNDiscriminator:
-    '''Generative Advesarial Imitation Learning'''
+    '''SNGAN Discriminator'''
+
     def __init__(self, obs_shape, batch_size):
         """
         visual forecasting by imitation learning class
@@ -22,7 +23,7 @@ class SNDiscriminator:
             # concatenate state and action to input discriminator
             expert_policy = tf.concat([self.expert_s, self.expert_s_next], axis=1)
             expert_policy = tf.squeeze(expert_policy, [-1])
-            expert_policy = tf.transpose(expert_policy, [0,2,3,1])
+            expert_policy = tf.transpose(expert_policy, [0, 2, 3, 1])
 
             # agent state placeholder
             self.agent_s = tf.placeholder(dtype=tf.float32, shape=[batch_size]+obs_shape)
@@ -31,10 +32,10 @@ class SNDiscriminator:
             # concatenate state and action to input discriminator
             agent_policy = tf.concat([self.agent_s, self.agent_s_next], axis=1)
             agent_policy = tf.squeeze(agent_policy, [-1])
-            agent_policy = tf.transpose(agent_policy, [0,2,3,1])
+            agent_policy = tf.transpose(agent_policy, [0, 2, 3, 1])
 
             # channel of input
-            self.input_channel = obs_shape[0] * 2
+            self.input_c = tf.shape(expert_policy)[-1]
 
             with tf.variable_scope('network') as network_scope:
                 # state-action of expert
@@ -64,16 +65,16 @@ class SNDiscriminator:
             optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
             self.train_op = optimizer.minimize(self.loss)
 
-            # 全てのsummaryを取得するoperation
+            # summary operation
             self.merged = tf.summary.merge_all()
 
             # fix discriminator and get d_reward
             self.rewards = tf.log(tf.clip_by_value(agent_prob, 1e-10, 1))
 
     def construct_network(self, input, is_sn=True):
-        '''SNGAN'''
+        '''Build network function'''
         with tf.variable_scope('block_1'):
-            x = leaky_relu(conv(input, [5, 5, self.input_channel, 64], [1, 2, 2, 1], is_sn))
+            x = leaky_relu(conv(input, [5, 5, self.input_c, 64], [1, 2, 2, 1], is_sn))
         with tf.variable_scope('block_2'):
             x = leaky_relu(instanceNorm(conv(x, [5, 5, 64, 128], [1, 2, 2, 1], is_sn)))
         with tf.variable_scope('block_3'):
@@ -103,7 +104,7 @@ class SNDiscriminator:
                     self.agent_s_next: agent_s_next})
 
     def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next, lr):
-        '''summary operation実行関数'''
+        '''summary operation function'''
         return tf.get_default_session().run(
                 self.merged,
                 feed_dict={
@@ -114,7 +115,7 @@ class SNDiscriminator:
                     self.agent_s_next: agent_s_next})
 
     def get_rewards(self, agent_s, agent_s_next):
-        ''' fix D and get rewards
+        '''fix D and get rewards
         agent_s: agent state
         agent_s_next: agent action
         '''
