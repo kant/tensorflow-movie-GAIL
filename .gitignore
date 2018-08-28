@@ -1,6 +1,6 @@
 algo/__pycache__
 network_models/__pycache__
 __pycache__/
-./trained_models/*
-./log/*
+trained_models/*
+log/*
 *.ipynb

@@ -1,12 +1,11 @@
 import tensorflow as tf
+from network_models.layers import *
 
 
-class Discriminator:
-    '''Generative Advesarial Imitation Learning'''
-    # relu or leaky_relu
-    nonlinear = tf.nn.leaky_relu
-    #nonlinear = tf.nn.relu
-    def __init__(self, obs_shape, lr):
+class SNDiscriminator:
+    '''SNGAN Discriminator'''
+
+    def __init__(self, obs_shape, batch_size):
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
@@ -14,29 +13,37 @@ class Discriminator:
 
         with tf.variable_scope('discriminator'):
             # get vaiable scope name
+            self.lr = tf.placeholder(dtype=tf.float32, name='learningrate')
             self.scope = tf.get_variable_scope().name
 
             # expert state placeholder
-            self.expert_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
+            self.expert_s = tf.placeholder(dtype=tf.float32, shape=[batch_size]+obs_shape)
             # expert action placeholder
-            self.expert_s_next = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
+            self.expert_s_next = tf.placeholder(dtype=tf.float32, shape=[batch_size]+obs_shape)
             # concatenate state and action to input discriminator
             expert_policy = tf.concat([self.expert_s, self.expert_s_next], axis=1)
+            expert_policy = tf.squeeze(expert_policy, [-1])
+            expert_policy = tf.transpose(expert_policy, [0, 2, 3, 1])
 
             # agent state placeholder
-            self.agent_s = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
+            self.agent_s = tf.placeholder(dtype=tf.float32, shape=[batch_size]+obs_shape)
             # agent action placeholder
-            self.agent_s_next = tf.placeholder(dtype=tf.float32, shape=[None]+obs_shape)
+            self.agent_s_next = tf.placeholder(dtype=tf.float32, shape=[batch_size]+obs_shape)
             # concatenate state and action to input discriminator
             agent_policy = tf.concat([self.agent_s, self.agent_s_next], axis=1)
+            agent_policy = tf.squeeze(agent_policy, [-1])
+            agent_policy = tf.transpose(agent_policy, [0, 2, 3, 1])
+
+            # channel of input
+            self.input_c = tf.shape(expert_policy)[-1]
 
             with tf.variable_scope('network') as network_scope:
                 # state-action of expert
-                expert_prob = self.construct_network(input=expert_policy)
+                expert_prob = self.construct_network(input=expert_policy, is_sn=True)
                 # share parameter of same scope with expert and agent
                 network_scope.reuse_variables()
                 # state-action of agent
-                agent_prob = self.construct_network(input=agent_policy)
+                agent_prob = self.construct_network(input=agent_policy, is_sn=True)
 
             with tf.variable_scope('loss'):
                 # maximiz D(s,a), because expert rewards are bigger than agent rewards
@@ -49,125 +56,66 @@ class Discriminator:
 
                 # inverse sign because tensorflow minimize loss
                 loss = loss_expert + loss_agent
-                loss = -loss
+                self.loss = - loss
                 # add discriminator loss to summary
-                tf.summary.scalar('discriminator', loss)
+                tf.summary.scalar('discriminator', self.loss)
 
             # optimize operation
-            optimizer = tf.train.AdamOptimizer(learning_rate=lr, epsilon=1e-5)
-            self.train_op = optimizer.minimize(loss)
+            #optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
+            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
+            self.train_op = optimizer.minimize(self.loss)
 
-            # 全てのsummaryを取得するoperation
+            # summary operation
             self.merged = tf.summary.merge_all()
 
             # fix discriminator and get d_reward
             self.rewards = tf.log(tf.clip_by_value(agent_prob, 1e-10, 1))
 
-    def construct_network(self, input):
-        '''
-        input: expertかactionのstate-action
-        discriminatorのbuild関数
-        '''
-
+    def construct_network(self, input, is_sn=True):
+        '''Build network function'''
         with tf.variable_scope('block_1'):
-            # 6x64x64x1 -> 6x16x16x64
-            x = tf.layers.conv3d(
-                    inputs=input,
-                    filters=64,
-                    kernel_size=(6,5,5),
-                    strides=(1,4,4),
-                    padding='same',
-                    activation=None,
-                    name='conv')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
-
+            x = leaky_relu(conv(input, [5, 5, self.input_c, 64], [1, 2, 2, 1], is_sn))
         with tf.variable_scope('block_2'):
-            # 6x16x16x64 -> 6x8x8x128
-            x = tf.layers.conv3d(
-                    x,
-                    filters=128,
-                    kernel_size=(6,5,5),
-                    strides=(1,2,2),
-                    padding='same',
-                    activation=None,
-                    name='conv')
-            x = tf.layers.batch_normalization(x, name='BN')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
-
+            x = leaky_relu(instanceNorm(conv(x, [5, 5, 64, 128], [1, 2, 2, 1], is_sn)))
         with tf.variable_scope('block_3'):
-            # 6x8x8x128 -> 6x4x4x256
-            x = tf.layers.conv3d(
-                    x,
-                    filters=256,
-                    kernel_size=(6,5,5),
-                    strides=(1,2,2),
-                    padding='same',
-                    activation=None,
-                    name='conv')
-            x = tf.layers.batch_normalization(x, name='BN')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
-
+            x = leaky_relu(instanceNorm(conv(x, [5, 5, 128, 256], [1, 2, 2, 1], is_sn)))
         with tf.variable_scope('block_4'):
-            # 6x4x4x256 -> 6x2x2x512
-            x = tf.layers.conv3d(
-                    x,
-                    filters=512,
-                    kernel_size=(6,5,5),
-                    strides=(1,2,2),
-                    padding='same',
-                    activation=None,
-                    name='conv')
-            x = tf.layers.batch_normalization(x, name='BN')
-            x = nonlinear(x, name='nonlin')
-            #x = tf.nn.relu(x, name='relu')
-
+            x = leaky_relu(instanceNorm(conv(x, [5, 5, 256, 512], [1, 2, 2, 1], is_sn)))
         with tf.variable_scope('block_5'):
-            # 6x2x2x512 -> 1x1x1x1
-            x = tf.layers.conv3d(
-                    x,
-                    filters=1,
-                    kernel_size=(6,5,5),
-                    strides=(6,2,2),
-                    padding='same',
-                    activation=None,
-                    name='conv')
-
             x = tf.layers.flatten(x, name='flatten')
+            x = fully_connected(x, 1, is_sn)
             # sigmoid activation 0~1
             prob = tf.sigmoid(x, name='prob')
-
         return prob
 
-    def train(self, expert_s, expert_s_next, agent_s, agent_s_next):
+    def train(self, expert_s, expert_s_next, agent_s, agent_s_next, lr):
         '''
         train discriminator function
         expert_s, expert_s_next: state-action of expert
         agent_s, agent_s_next: state-action of expert
         '''
         return tf.get_default_session().run(
-                self.train_op,
+                [self.train_op, self.loss],
                 feed_dict={
+                    self.lr: lr,
                     self.expert_s: expert_s,
                     self.expert_s_next: expert_s_next,
                     self.agent_s: agent_s,
                     self.agent_s_next: agent_s_next})
 
-    def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next):
-        '''summary operation実行関数'''
+    def get_summary(self, expert_s, expert_s_next, agent_s, agent_s_next, lr):
+        '''summary operation function'''
         return tf.get_default_session().run(
                 self.merged,
                 feed_dict={
+                    self.lr: lr,
                     self.expert_s: expert_s,
                     self.expert_s_next: expert_s_next,
                     self.agent_s: agent_s,
                     self.agent_s_next: agent_s_next})
 
     def get_rewards(self, agent_s, agent_s_next):
-        '''
-        fix D and get rewards
+        '''fix D and get rewards
         agent_s: agent state
         agent_s_next: agent action
         '''

@@ -2,8 +2,8 @@ import tensorflow as tf
 import copy
 
 
-class PPOTrain:
-    '''PPO trainer class'''
+class TRPOTrain:
+    '''TRPO trainer class'''
     def __init__(
             self,
             Policy,
@@ -56,16 +56,8 @@ class PPOTrain:
             # 収益期待値->最大化
             ratios = tf.exp(
                     tf.log(tf.clip_by_value(probs, 1e-10, 1.0)) - \
-                            tf.log(tf.clip_by_value(probs_old, 1e-10, 1.0)))
-            # clipping ratios
-            clipped_ratios = tf.clip_by_value(
-                    ratios,
-                    clip_value_min=1 - clip_value,
-                    clip_value_max=1 + clip_value)
-            # clipping前とclipping後のlossで小さい方を使う
-            loss_clip = tf.minimum(
-                    tf.reduce_mean(tf.multiply(self.gaes, ratios)),
-                    tf.reduce_mean(tf.multiply(self.gaes, clipped_ratios)))
+                    tf.log(tf.clip_by_value(probs_old, 1e-10, 1.0)))
+            loss_clip = tf.reduce_mean(tf.multiply(self.gaes, ratios))
             self.loss_clip = tf.reduce_mean(loss_clip)
             # add clipping loss to summary
             tf.summary.scalar('loss_clip', self.loss_clip)
@@ -80,7 +72,7 @@ class PPOTrain:
 
             # 探索を促すためのentropy制約項->最大化
             # 方策のentropyが小さくなりすぎるのを防ぐ
-            entropy = -tf.reduce_mean(probs * \
+            entropy = - tf.reduce_mean(probs * \
                     tf.log(tf.clip_by_value(probs, 1e-10, 1.0)), axis=1)
             self.entropy = tf.reduce_mean(entropy, axis=0)
             tf.summary.scalar('entropy', self.entropy)
@@ -89,7 +81,8 @@ class PPOTrain:
             loss_l1 = tf.reduce_sum(
                     tf.abs(sample_act - self.expart_act),
                     axis=1)
-            self.loss_l1 = tf.reduce_mean(loss_l1)
+            loss_l1 = tf.reduce_mean(loss_l1)
+            self.loss_l1 = loss_l1
             tf.summary.scalar('loss_l1', self.loss_l1)
 
             # 以下の式を最小化
@@ -157,7 +150,7 @@ class PPOTrain:
         gaes = copy.deepcopy(deltas)
         # is T-1, where T is time step which run policy
         for t in reversed(range(len(gaes) - 1)):
-            gaes[t] = deltas[t] + self.gamma * gaes[t + 1]
+            gaes[t] = gaes[t] + self.gamma * gaes[t + 1]
         return gaes
 
     def get_grad(self, obs , gaes, rewards, v_preds_next, expert_act, lr):
