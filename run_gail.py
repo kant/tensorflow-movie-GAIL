@@ -24,8 +24,10 @@ def argparser():
             default='out')
     parser.add_argument('--algo', type=str, help='algo name, ppo or trpo',
             default='ppo')
-    parser.add_argument('--optimizer', type=str, help='training optimizer',
+    parser.add_argument('--g_optimizer', type=str, help='training optimizer',
             default='MomentumSGD')
+    parser.add_argument('--d_optimizer', type=str, help='training optimizer',
+            default='Adam')
     parser.add_argument('--iteration', type=int, help='iteration',
             default=int(1e3))
     parser.add_argument('--batch_size', type=int, default=32)
@@ -67,7 +69,8 @@ def main(args):
             'iteration': args.iteration,
             'D_step': args.D_step,
             'G_step': args.G_step,
-            'optimizer': args.optimizer,
+            'g_optimizer': args.g_optimizer,
+            'd_optimizer': args.d_optimizer,
             'gamma': args.gamma,
             'initia_learning_rate': args.initial_lr,
             'lr_schedules': args.lr_schedules,
@@ -129,7 +132,7 @@ def main(args):
                 c_l1=args.c_l1,
                 obs_size=args.obs_size,
                 vf_clip=args.vf_clip,
-                optimizer=args.optimizer)
+                optimizer=args.g_optimizer)
     elif args.algo == 'trpo':
         print('Building TRPO Agent')
         Agent = TRPOTrain(
@@ -142,7 +145,7 @@ def main(args):
                 c_l1=args.c_l1,
                 obs_size=args.obs_size,
                 vf_clip=args.vf_clip,
-                optimizer=args.optimizer)
+                optimizer=args.g_optimizer)
     else:
         raise ValueError('invalid algo name')
 
@@ -151,13 +154,13 @@ def main(args):
         print('Building SNGAN Discriminator')
         D = SNGANDiscriminator(obs_shape=obs_shape,
             batch_size=args.batch_size,
-            optimizer=args.optimizer)
+            optimizer=args.d_optimizer)
     else:
         print('Building DCGAN Discriminator')
         D = DCGANDiscriminator(obs_shape=obs_shape,
             batch_size=args.batch_size,
             leaky=args.leaky,
-            optimizer=args.optimizer)
+            optimizer=args.d_optimizer)
 
     # Create tensorflow saver
     saver = tf.train.Saver()
