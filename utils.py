@@ -8,7 +8,9 @@ def reset_seed(seed=0):
     np.random.seed(seed)
 
 def generator(data, batch_size=32, img_size=64):
+    # Fix random
     reset_seed(seed=0)
+    # Select train data
     train_count = len(data) * 0.9
     shuffle_indices = np.random.randint(
             low=0,
