@@ -1,12 +1,19 @@
-import numpy as np
+import random
 import cv2
+import numpy as np
 
+
+def reset_seed(seed=0):
+    random.seed(seed)
+    np.random.seed(seed)
 
 def generator(data, batch_size=32, img_size=64):
+    reset_seed(seed=0)
+    train_count = len(data) * 0.9
     shuffle_indices = np.random.randint(
             low=0,
             high=data.shape[1],
-            size=data.shape[1] - 1)
+            size=int(train_count))
     while True:
         batch = []
         for indices in shuffle_indices:
