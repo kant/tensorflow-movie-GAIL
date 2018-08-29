@@ -184,7 +184,7 @@ class DCGANPolicy:
                             sigma = tf.clip_by_value(
                                     tf.nn.softplus(tf.layers.flatten(sigma)),
                                     1e-10,
-                                    1.0,
+                                    1000.0,
                                     name='sigma')
 
                             # sample operation

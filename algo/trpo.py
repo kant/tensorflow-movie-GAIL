@@ -15,7 +15,8 @@ class TRPOTrain:
             c_entropy=0.01,
             c_l1=1.0,
             obs_size=64,
-            vf_clip=''):
+            vf_clip='',
+            optimizer='MomentumSGD'):
         # Policy network
         self.Policy = Policy
         self.Old_Policy = Old_Policy
@@ -91,14 +92,16 @@ class TRPOTrain:
             tf.summary.scalar('total', self.loss)
 
         # optimizer
-        # optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
-        optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
+        if optimizer == 'MomentumSGD':
+            opt = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
+        elif optimizer == 'Adam':
+            opt = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
 
         # Get gradients operation
-        self.gradients = optimizer.compute_gradients(self.loss, var_list=pi_trainable)
+        self.gradients = opt.compute_gradients(self.loss, var_list=pi_trainable)
 
         # train operation
-        self.train_op = optimizer.minimize(self.loss, var_list=pi_trainable)
+        self.train_op = opt.minimize(self.loss, var_list=pi_trainable)
 
         # summary operation
         self.merged = tf.summary.merge_all()

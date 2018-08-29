@@ -3,7 +3,7 @@ import tensorflow as tf
 
 class DCGANDiscriminator:
     '''Generative Advesarial Imitation Learning'''
-    def __init__(self, obs_shape, batch_size, leaky=True):
+    def __init__(self, obs_shape, batch_size, leaky=True, optimizer='MomentumSGD'):
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
@@ -52,10 +52,12 @@ class DCGANDiscriminator:
                 # add discriminator loss to summary
                 tf.summary.scalar('discriminator', self.loss)
 
-            # optimize operation
-            #optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
-            self.train_op = optimizer.minimize(self.loss)
+            # optimizer
+            if optimizer == 'MomentumSGD':
+                opt = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
+            elif optimizer == 'Adam':
+                opt = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
+            self.train_op = opt.minimize(self.loss)
 
             # 全てのsummaryを取得するoperation
             self.merged = tf.summary.merge_all()

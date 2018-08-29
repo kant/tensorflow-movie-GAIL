@@ -24,6 +24,8 @@ def argparser():
             default='out')
     parser.add_argument('--algo', type=str, help='algo name, ppo or trpo',
             default='ppo')
+    parser.add_argument('--optimizer', type=str, help='training optimizer',
+            default='MomentumSGD')
     parser.add_argument('--iteration', type=int, help='iteration',
             default=int(1e3))
     parser.add_argument('--batch_size', type=int, default=32)
@@ -65,6 +67,7 @@ def main(args):
             'iteration': args.iteration,
             'D_step': args.D_step,
             'G_step': args.G_step,
+            'optimizer': args.optimizer,
             'gamma': args.gamma,
             'initia_learning_rate': args.initial_lr,
             'lr_schedules': args.lr_schedules,
@@ -125,7 +128,8 @@ def main(args):
                 c_entropy=args.c_entropy,
                 c_l1=args.c_l1,
                 obs_size=args.obs_size,
-                vf_clip=args.vf_clip)
+                vf_clip=args.vf_clip,
+                optimizer=args.optimizer)
     elif args.algo == 'trpo':
         print('Building TRPO Agent')
         Agent = TRPOTrain(
@@ -137,7 +141,8 @@ def main(args):
                 c_entropy=args.c_entropy,
                 c_l1=args.c_l1,
                 obs_size=args.obs_size,
-                vf_clip=args.vf_clip)
+                vf_clip=args.vf_clip,
+                optimizer=args.optimizer)
     else:
         raise ValueError('invalid algo name')
 
@@ -145,12 +150,14 @@ def main(args):
     if args.d_sn:
         print('Building SNGAN Discriminator')
         D = SNGANDiscriminator(obs_shape=obs_shape,
-            batch_size=args.batch_size)
+            batch_size=args.batch_size,
+            optimizer=args.optimizer)
     else:
         print('Building DCGAN Discriminator')
         D = DCGANDiscriminator(obs_shape=obs_shape,
             batch_size=args.batch_size,
-            leaky=args.leaky)
+            leaky=args.leaky,
+            optimizer=args.optimizer)
 
     # Create tensorflow saver
     saver = tf.train.Saver()
@@ -200,7 +207,7 @@ def main(args):
                 # Get expert actions
                 expert_act = expert_batch[:, run_policy_steps+3, :, :, :]
                 expert_act = np.reshape(expert_act,
-                        (args.batch_size, args.obs_size * args.obs_size))
+                        (expert_act.shape[0], args.obs_size * args.obs_size))
                 expert_actions.append(expert_act)
 
                 # Create next_obs

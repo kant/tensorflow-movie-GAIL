@@ -42,12 +42,12 @@ class SNGANPolicy:
                     with tf.variable_scope('block_4_sigma'):
                         sigma = tf.nn.relu(instanceNorm(deconv(x, [5, 5, 1, 64], [1, 2, 2, 1], [batch_size, img_H, img_W, 1])))
                         sigma = tf.layers.flatten(tf.nn.softplus(sigma), name='sigma')
-                        sigma = tf.clip_by_value(sigma, 1e-10, 1.0)
+                        sigma = tf.clip_by_value(sigma, 1e-10, 1000.0)
 
                     # sample operation
                     samples = mu + sigma * \
                             tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
-                    
+
                     # calclate prob density
                     probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) / \
                     (tf.sqrt(2 * np.pi) * sigma)
@@ -86,7 +86,7 @@ class SNGANPolicy:
         return tf.get_default_session().run(
                 [self.sample_op, self.v_preds_op],
                 feed_dict={self.obs: obs})
-    
+
     def inference(self, obs):
         '''inference function'''
         return tf.get_default_session().run(
