@@ -7,9 +7,10 @@ import numpy as np
 from tqdm import tqdm
 import tensorflow as tf
 
-from network_models.policy_dcgan import Policy_dcgan
-from network_models.discriminator import Discriminator
-from network_models.sn_discriminator import SNDiscriminator
+from network_models.dcgan_policy import DCGANPolicy
+from network_models.sngan_policy import SNGANPolicy
+from network_models.dcgan_discriminator import DCGANDiscriminator
+from network_models.sngan_discriminator import SNGANDiscriminator
 from algo.ppo import PPOTrain
 from algo.trpo import TRPOTrain
 from utils import generator
@@ -39,7 +40,8 @@ def argparser():
     parser.add_argument('--c_entropy', type=float, default=0.01)
     parser.add_argument('--c_l1', type=float, default=1.0)
     parser.add_argument('--leaky', type=bool, default=True)
-    parser.add_argument('--sn', type=bool, default='')
+    parser.add_argument('--g_sn', type=bool, default='')
+    parser.add_argument('--d_sn', type=bool, default='')
     parser.add_argument('--frequency', type=int, default=50)
     parser.add_argument('--gpu_num', type=str, help='specify GPU number',
             default='0')
@@ -71,7 +73,8 @@ def main(args):
             'c_l1': args.c_l1,
             'vf_clip': args.vf_clip,
             'leaky': args.leaky,
-            'spectral normalization': args.sn}
+            'SNGANGenerator': args.g_sn,
+            'SNGANDiscriminator': args.d_sn}
     with open(os.path.join(out, 'config.json'), 'w') as f:
         f.write(json.dumps(config, indent=4))
 
@@ -82,19 +85,33 @@ def main(args):
     gen = generator(data,
             batch_size=args.batch_size, img_size=args.obs_size)
 
-    # Build policy network
-    Policy = Policy_dcgan(
-            'policy',
-            obs_shape=obs_shape,
-            batch_size=args.batch_size,
-            decode=True,
-            leaky=args.leaky)
-    Old_Policy = Policy_dcgan(
-            'old_policy',
-            obs_shape=obs_shape,
-            batch_size=args.batch_size,
-            decode=True,
-            leaky=args.leaky)
+    if not args.g_sn:
+        print('Building DCGAN Generator as Policy Network')
+        # Build policy network
+        Policy = DCGANPolicy(
+                'policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True,
+                leaky=args.leaky)
+        Old_Policy = DCGANPolicy(
+                'old_policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True,
+                leaky=args.leaky)
+    else:
+        print('Building SNGAN Generator as Policy Network')
+        Policy = SNGANPolicy(
+                'policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True)
+        Old_Policy = SNGANPolicy(
+                'old_policy',
+                obs_shape=obs_shape,
+                batch_size=args.batch_size,
+                decode=True)
 
     # Build reinforcement agent
     if args.algo == 'ppo':
@@ -125,13 +142,13 @@ def main(args):
         raise ValueError('invalid algo name')
 
     # Build Discriminator
-    if args.sn:
-        print('Building SNGAN Descriminator')
-        D = SNDiscriminator(obs_shape=obs_shape,
+    if args.d_sn:
+        print('Building SNGAN Discriminator')
+        D = SNGANDiscriminator(obs_shape=obs_shape,
             batch_size=args.batch_size)
     else:
-        print('Building DCGAN Descriminator')
-        D = Discriminator(obs_shape=obs_shape,
+        print('Building DCGAN Discriminator')
+        D = DCGANDiscriminator(obs_shape=obs_shape,
             batch_size=args.batch_size,
             leaky=args.leaky)
 

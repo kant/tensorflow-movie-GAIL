@@ -13,6 +13,15 @@ def conv(inputs, shape, strides, is_sn=False):
         return tf.nn.conv2d(inputs, filters, strides, "SAME") + bias
 
 
+def deconv(inputs, shape, strides, out_num, is_sn=False):
+    filters = tf.get_variable("kernel", shape=shape, initializer=tf.random_normal_initializer(stddev=0.02))
+    bias = tf.get_variable("bias", shape=[shape[-2]], initializer=tf.constant_initializer([0]))
+    if is_sn:
+        return tf.nn.conv2d_transpose(inputs, spectral_norm("sn", filters), out_num, strides) + bias
+    else:
+        return tf.nn.conv2d_transpose(inputs, filters, out_num, strides) + bias
+
+
 def fully_connected(inputs, num_out, is_sn=False):
     W = tf.get_variable("W", [inputs.shape[-1], num_out], initializer=tf.random_normal_initializer(stddev=0.02))
     b = tf.get_variable("b", [num_out], initializer=tf.constant_initializer([0]))
@@ -54,3 +63,9 @@ def instanceNorm(inputs):
     scale = tf.get_variable("scale", shape=mean.shape, initializer=tf.constant_initializer([1.0]))
     shift = tf.get_variable("shift", shape=mean.shape, initializer=tf.constant_initializer([0.0]))
     return (inputs - mean) * scale / (tf.sqrt(var + epsilon)) + shift
+
+
+def mapping(x):
+    max = np.max(x)
+    min = np.min(x)
+    return (x - min) * 255.0 / (max - min + epsilon)
