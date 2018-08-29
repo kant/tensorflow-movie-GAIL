@@ -158,8 +158,7 @@ def main(args):
     config = tf.ConfigProto(
             gpu_options=tf.GPUOptions(
                 visible_device_list=args.gpu_num,
-                allow_growth=True
-                ))
+                allow_growth=True))
     # Start session
     with tf.Session(config=config) as sess:
         # Summary writer

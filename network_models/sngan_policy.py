@@ -47,13 +47,13 @@ class SNGANPolicy:
                     # sample operation
                     samples = mu + sigma * \
                             tf.random_normal([tf.shape(mu)[0], tf.shape(mu)[1]])
-                    self.sample_op = samples
-
+                    
                     # calclate prob density
                     probs = tf.exp(- 0.5 * (tf.square((samples - mu) / sigma))) / \
                     (tf.sqrt(2 * np.pi) * sigma)
-                    self.probs_op = probs
 
+                    self.sample_op = samples
+                    self.probs_op = probs
                     self.mu = mu
                     self.sigma = sigma
 
@@ -85,6 +85,12 @@ class SNGANPolicy:
         '''
         return tf.get_default_session().run(
                 [self.sample_op, self.v_preds_op],
+                feed_dict={self.obs: obs})
+    
+    def inference(self, obs):
+        '''inference function'''
+        return tf.get_default_session().run(
+                self.mu,
                 feed_dict={self.obs: obs})
 
     def get_variables(self):

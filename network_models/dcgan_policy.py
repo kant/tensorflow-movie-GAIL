@@ -197,6 +197,8 @@ class DCGANPolicy:
 
                             self.sample_op = samples
                             self.probs_op = probs
+                            self.mu = mu
+                            self.sigma = sigma
 
                             # test operation
                             self.test_op = tf.shape(self.sample_op)
@@ -288,6 +290,12 @@ class DCGANPolicy:
         '''
         return tf.get_default_session().run(
                 [self.sample_op, self.v_preds_op],
+                feed_dict={self.obs: obs})
+    
+    def inference(self, obs):
+        '''inference function'''
+        return tf.get_default_session().run(
+                self.mu,
                 feed_dict={self.obs: obs})
 
     def get_variables(self):
