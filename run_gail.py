@@ -76,8 +76,8 @@ def main(args):
             'c_l1': args.c_l1,
             'vf_clip': args.vf_clip,
             'leaky': args.leaky,
-            'SNGANGenerator': args.g_sn,
-            'SNGANDiscriminator': args.d_sn}
+            'g_sn': args.g_sn,
+            'd_sn': args.d_sn}
     with open(os.path.join(out, 'config.json'), 'w') as f:
         f.write(json.dumps(config, indent=4))
 
