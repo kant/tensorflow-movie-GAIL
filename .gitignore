@@ -1,7 +1,12 @@
+<<<<<<< HEAD
 algo/__pycache__
 network_models/__pycache__
 __pycache__/
 trained_models/*
 log/*
 *.ipynb
+=======
+*__pycache__
+out/*
+>>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde
 *.ipynb_checkpoints

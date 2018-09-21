@@ -2,10 +2,16 @@ import tensorflow as tf
 from network_models.layers import *
 
 
+<<<<<<< HEAD:network_models/sngan_discriminator.py
 class SNDiscriminator:
     '''SNGAN Discriminator'''
 
     def __init__(self, obs_shape, batch_size):
+=======
+class SNGANDiscriminator:
+    '''Generative Advesarial Imitation Learning'''
+    def __init__(self, obs_shape, batch_size, optimizer):
+>>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde:network_models/sngan_discriminator.py
         """
         visual forecasting by imitation learning class
         obs_shape: stacked state image shape
@@ -60,10 +66,12 @@ class SNDiscriminator:
                 # add discriminator loss to summary
                 tf.summary.scalar('discriminator', self.loss)
 
-            # optimize operation
-            #optimizer = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
-            optimizer = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
-            self.train_op = optimizer.minimize(self.loss)
+            # optimizer
+            if optimizer == 'MomentumSGD':
+                opt = tf.train.MomentumOptimizer(learning_rate=self.lr, momentum=0.9)
+            elif optimizer == 'Adam':
+                opt = tf.train.AdamOptimizer(learning_rate=self.lr, epsilon=1e-5)
+            self.train_op = opt.minimize(self.loss)
 
             # summary operation
             self.merged = tf.summary.merge_all()

@@ -3,8 +3,12 @@ import tensorflow as tf
 
 
 class DCGANPolicy:
+<<<<<<< HEAD:network_models/dcgan_policy.py
     '''DCGAN Encoder Decoder including 3D conv'''
 
+=======
+    '''encoder decoder policy network'''
+>>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde:network_models/dcgan_policy.py
     def __init__(self, name, obs_shape, batch_size, decode=True, leaky=True):
 
         with tf.variable_scope(name):
@@ -173,6 +177,7 @@ class DCGANPolicy:
                                 name='deconv_mu')
                         self.mu = tf.layers.flatten(tf.nn.sigmoid(mu), name='mu')
 
+<<<<<<< HEAD:network_models/dcgan_policy.py
                         # inference action sigma
                         sigma = tf.layers.conv2d_transpose(
                                 x,
@@ -187,6 +192,22 @@ class DCGANPolicy:
                                 1e-10,
                                 1.0,
                                 name='sigma')
+=======
+                            # inference action sigma
+                            sigma = tf.layers.conv2d_transpose(
+                                    x,
+                                    filters=1,
+                                    kernel_size=(5,5),
+                                    strides=2,
+                                    padding='same',
+                                    activation=None,
+                                    name='deconv_sigma')
+                            sigma = tf.clip_by_value(
+                                    tf.nn.softplus(tf.layers.flatten(sigma)),
+                                    1e-10,
+                                    1000.0,
+                                    name='sigma')
+>>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde:network_models/dcgan_policy.py
 
                     # sample operation
                     samples = self.mu + self.sigma * \
@@ -197,8 +218,15 @@ class DCGANPolicy:
                             (tf.square((samples - self.mu) / self.sigma))) / \
                             (tf.sqrt(2 * np.pi) * self.sigma)
 
+<<<<<<< HEAD:network_models/dcgan_policy.py
                     self.sample_op = samples
                     self.probs_op = probs
+=======
+                            self.sample_op = samples
+                            self.probs_op = probs
+                            self.mu = mu
+                            self.sigma = sigma
+>>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde:network_models/dcgan_policy.py
 
                     # test operation
                     self.test_op = tf.shape(self.sample_op)
@@ -290,6 +318,12 @@ class DCGANPolicy:
         '''
         return tf.get_default_session().run(
                 [self.sample_op, self.v_preds_op],
+                feed_dict={self.obs: obs})
+    
+    def inference(self, obs):
+        '''inference function'''
+        return tf.get_default_session().run(
+                self.mu,
                 feed_dict={self.obs: obs})
 
     def get_mu_sigma(self, obs):
