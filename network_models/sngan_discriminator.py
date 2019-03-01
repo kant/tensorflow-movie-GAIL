@@ -9,7 +9,7 @@ class SNDiscriminator:
     def __init__(self, obs_shape, batch_size):
 =======
 class SNGANDiscriminator:
-    '''Generative Advesarial Imitation Learning'''
+    '''Generative Adversarial Imitation Learning'''
     def __init__(self, obs_shape, batch_size, optimizer):
 >>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde:network_models/sngan_discriminator.py
         """
@@ -18,7 +18,7 @@ class SNGANDiscriminator:
         """
 
         with tf.variable_scope('discriminator'):
-            # get vaiable scope name
+            # get variable scope name
             self.lr = tf.placeholder(dtype=tf.float32, name='learningrate')
             self.scope = tf.get_variable_scope().name
 
@@ -52,7 +52,7 @@ class SNGANDiscriminator:
                 agent_prob = self.construct_network(input=agent_policy, is_sn=True)
 
             with tf.variable_scope('loss'):
-                # maximiz D(s,a), because expert rewards are bigger than agent rewards
+                # maximize D(s,a), because expert rewards are bigger than agent rewards
                 loss_expert = tf.reduce_mean(tf.log(tf.clip_by_value(expert_prob, 0.01, 1)))
                 tf.summary.scalar('loss_expert', loss_expert)
 
@@ -134,5 +134,5 @@ class SNGANDiscriminator:
                     self.agent_s_next: agent_s_next})
 
     def get_trainable_variables(self):
-        '''get trainable paremeter function'''
+        '''get trainable parameter function'''
         return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.scope)
