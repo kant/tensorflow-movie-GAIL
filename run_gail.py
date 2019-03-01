@@ -104,7 +104,7 @@ def main(args):
 <<<<<<< HEAD
     # Build networks
     if args.sn:
-        print('Building SNGAN Descriminator')
+        print('Building SNGAN Discriminator')
         Policy = SNGANPolicy(
                 'policy',
                 obs_shape=obs_shape,
