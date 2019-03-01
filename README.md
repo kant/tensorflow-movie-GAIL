@@ -1,2 +1,2 @@
 # VisualForecast
-It is an achivement at an OMRON SINIC X's intern.
+It is an achievement at an OMRON SINIC X's intern.
