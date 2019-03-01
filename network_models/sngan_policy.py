@@ -194,7 +194,7 @@ class SNGANPolicy:
 
     def test_run(self, obs):
 <<<<<<< HEAD
-        '''train operatiion function'''
+        '''train operation function'''
 =======
         '''train operation実行関数'''
 >>>>>>> c79cfc48f93b70a6c24e29d063cb881ff88f5fde
